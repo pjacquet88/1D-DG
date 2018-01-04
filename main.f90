@@ -1,30 +1,22 @@
 program main
   use m_polynom
+  use m_acoustic
 
   implicit none
 
-
   integer           :: i,j
   type(t_polynom_b) :: bpol
-  type(t_polynom_b) :: bpol1,bpol2,bpol3,bpol4,bpol5
   type(t_polynom_b) :: dbpol
   type(t_polynom_l) :: lpol
-  type(t_polynom_l) :: lpol1,lpol2,lpol3,lpol4,lpol5
 
-  real,dimension(5) :: coef_test_b
-  real,dimension(5) :: coef_test_db
-  real,dimension(5) :: coef_test_l
-  real              :: erreur,a
+  real,parameter :: h=1/100000.0
+  integer,parameter :: ordre=12,DoF=ordre+1
 
-  real,dimension(5),parameter :: coef1=(/1.0,0.0,0.0,0.0,0.0/)
-  real,dimension(5),parameter :: coef2=(/0.0,1.0,0.0,0.0,0.0/)
-  real,dimension(5),parameter :: coef3=(/0.0,0.0,1.0,0.0,0.0/)
-  real,dimension(5),parameter :: coef4=(/0.0,0.0,0.0,1.0,0.0/)
-  real,dimension(5),parameter :: coef5=(/0.0,0.0,0.0,0.0,1.0/)
-
-
-  real,parameter :: h=1/10000.0
-    
+  real,dimension(DoF) :: coef_test_b
+  real,dimension(DoF) :: coef_test_db
+  real,dimension(DoF) :: coef_test_l
+  real                :: erreur,a
+  
   integer :: values(1:8), k
   integer, dimension(:), allocatable :: seed
 
@@ -35,82 +27,97 @@ program main
   seed(:) = values(8)
   call random_seed(put=seed)
 
-  print*,'test0'
 
-  call init_polynom_b(bpol1,coef1)
-  call init_polynom_b(bpol2,coef2)
-  call init_polynom_b(bpol3,coef3)
-  call init_polynom_b(bpol4,coef4)
-  call init_polynom_b(bpol5,coef5)
+   call init_basis_b(ordre)
+   call init_basis_l(ordre)
+   
+   
+   ! do j=1,ordre+1
+   !    do i=0,100
+   !       write(20+j,*),i/100.0,eval_polynom_b(base_b(j),i/100.0)
+   !       write(30+j,*),i/100.0,eval_polynom_l(base_l(j),i/100.0)
+   !    end do
+   ! end do
 
-  call init_polynom_l(lpol1,coef1)
-  call init_polynom_l(lpol2,coef2)
-  call init_polynom_l(lpol3,coef3)
-  call init_polynom_l(lpol4,coef4)
-  call init_polynom_l(lpol5,coef5)
-
-  print*,'test1'
-  
-  do i=0,100
-     write(21,*),i/100.0,eval_polynom_b(bpol1,i/100.0)
-     write(22,*),i/100.0,eval_polynom_b(bpol2,i/100.0)
-     write(23,*),i/100.0,eval_polynom_b(bpol3,i/100.0)
-     write(24,*),i/100.0,eval_polynom_b(bpol4,i/100.0)
-     write(25,*),i/100.0,eval_polynom_b(bpol5,i/100.0)
-
-     write(31,*),i/100.0,eval_polynom_l(lpol1,i/100.0)
-     write(32,*),i/100.0,eval_polynom_l(lpol2,i/100.0)
-     write(33,*),i/100.0,eval_polynom_l(lpol3,i/100.0)
-     write(34,*),i/100.0,eval_polynom_l(lpol4,i/100.0)
-     write(35,*),i/100.0,eval_polynom_l(lpol5,i/100.0)
-  end do
-
-  call system('gnuplot script_base_b.gnu')
+  !call system('gnuplot script_base_b.gnu')
   !call system('eog base_b.png &')
 
-  call system('gnuplot script_base_l.gnu')
+  !call system('gnuplot script_base_l.gnu')
   !call system('eog base_l.png &')
-  
-  
-  do i=1,5
+
+
+  do i=1,ordre+1
      call random_number(coef_test_b(i))
   end do
 
   call init_polynom_b(bpol,coef_test_b)
 
-  print*,'test2'
   call create_B2L
+  
   call Bernstein2Lagrange(bpol,lpol)
 
   do i=0,100
-     write(41,*),i/100.0,eval_polynom_b(bpol,i/100.0)
-     write(42,*),i/100.0,eval_polynom_l(lpol,i/100.0)
+     write(141,*),i/100.0,eval_polynom_b(bpol,i/100.0)
+     write(142,*),i/100.0,eval_polynom_l(lpol,i/100.0)
   end do
+
+  ! call free_polynom_l(lpol)
+  ! call free_polynom_b(bpol)
 
   call system('gnuplot script_test_b2l.gnu')
- ! call system('eog b2l.png &')
+  !call system('eog b2l.png &')
 
-  do i=0,100
+  ! do i=1,ordre+1
+  !    call random_number(coef_test_l(i))
+  ! end do
 
-  end do
+  ! call init_polynom_l(lpol,coef_test_l)
 
-  call create_derive
+  ! call create_L2B
+  
+  ! call Lagrange2Bernstein(lpol,bpol)
+
+  ! do i=0,100
+  !    write(151,*),i/100.0,eval_polynom_l(lpol,i/100.0)
+  !    write(152,*),i/100.0,eval_polynom_b(bpol,i/100.0)
+  ! end do
+
+  ! call system('gnuplot script_test_l2b.gnu')
+  ! call system('eog l2b.png &')
+
+  call create_derive(ordre)
   call deriv_pol_b(bpol,dbpol)
 
-  print*,'test3'
-  
-  do i=0,100
-     write(51,*) i/100.0, (eval_polynom_b(bpol,i/100.0+h)-eval_polynom_b(bpol,i/100.0-h))/(2*h)
-     write(52,*) i/100.0, eval_polynom_b(dbpol,i/100.0)
+
+   write(251,*) 0.0, (eval_polynom_b(bpol,0.0+h)-eval_polynom_b(bpol,0.0))/(h)
+     write(252,*) 0.0, eval_polynom_b(dbpol,0.0)
+
+  do i=1,99
+     write(251,*) i/100.0, (eval_polynom_b(bpol,i/100.0+h)-eval_polynom_b(bpol,i/100.0-h))/(2*h)
+     write(252,*) i/100.0, eval_polynom_b(dbpol,i/100.0)
   end do
+
+     write(251,*) 1.0, (eval_polynom_b(bpol,1.0)-eval_polynom_b(bpol,1.0-h))/(h)
+     write(252,*) 1.0, eval_polynom_b(dbpol,1.0)
+
 
 
  call system('gnuplot script_test_derive.gnu')
  call system('eog derive.png &')
 
- call create_L2B
- 
-  print*,'done'
+ ! call create_L2B
 
-  
+ ! call init_quadrature
+ ! call init_m_loc_l(DoF)
+
+ ! do i=1,DoF
+ !    print*,m_loc(i,:)
+ ! end do
+
+
+ print*,'done'
+
+
+ 
+
 end program main

@@ -11,84 +11,89 @@ module m_matrix
 
 contains
 
-  function det2(A)
-    real,dimension(2,2),intent(in) :: A
-    real                           :: det2
+  function inv(A)
+    real,dimension(:,:),intent(in)          :: A
+    real,dimension(size(A,1),size(A,1))     :: inv
+    real,dimension(size(A,1)-1,size(A,1)-1) :: B
+    integer                                 :: i,i1,j,k
 
-    det2=A(1,1)*A(2,2)-A(1,2)*A(2,1)
-  end function det2
-
-
-  function det3(A)
-    real,dimension(3,3),intent(in) :: A
-    real                           :: det3
-
-    det3=A(1,1)*det2(A(2:3,2:3))           &
-    -A(2,1)*(A(1,2)*A(3,3)-A(1,3)*A(3,2))  &
-    +A(3,1)*det2(A(1:2,2:3))
-    
-  end function det3
-
-
-  function det4(A)
-    real,dimension(4,4),intent(in) :: A
-    real                           :: det4
-    
-    det4=A(1,1)*(A(2,2)*(A(3,3)*A(4,4)-A(3,4)*A(4,3))+&
-         A(2,3)*(A(3,4)*A(4,2)-A(3,2)*A(4,4))+&
-         A(2,4)*(A(3,2)*A(4,3)-A(3,3)*A(4,2)))  &
-         - A(1,2)*(A(2,1)*(A(3,3)*A(4,4)-A(3,4)*A(4,3))+&
-         A(2,3)*(A(3,4)*A(4,1)-A(3,1)*A(4,4))+&
-         A(2,4)*(A(3,1)*A(4,3)-A(3,3)*A(4,1)))&
-         + A(1,3)*(A(2,1)*(A(3,2)*A(4,4)-A(3,4)*A(4,2))+&
-         A(2,2)*(A(3,4)*A(4,1)-A(3,1)*A(4,4))+&
-         A(2,4)*(A(3,1)*A(4,2)-A(3,2)*A(4,1)))&
-         - A(1,4)*(A(2,1)*(A(3,2)*A(4,3)-A(3,3)*A(4,2))+&
-         A(2,2)*(A(3,3)*A(4,1)-A(3,1)*A(4,3))+&
-         A(2,3)*(A(3,1)*A(4,2)-A(3,2)*A(4,1)))
-  end function det4
-
-
-  function det5(A)
-    real,dimension(5,5),intent(in) :: A
-    real                           :: det5
-    integer                        :: i
-    real,dimension(4,4)            :: B
-
-    do i=1,5
-
-       B(1:i-1,:)=A(1:i-1,2:5)
-       B(i:4,:)=A(i+1:5,2:5)
-
-       det5=det5+(-1)**(i+1)*A(i,1)*det4(B)
-
-    end do
-
-  end function det5
-
-  function inv5(A)
-    real,dimension(5,5),intent(in) :: A
-    real,dimension(5,5)            :: inv5
-    real,dimension(4,4)            :: B
-    integer                        :: i,i1,j
-
-    inv5=0.0
+    inv=0.0
     B=0.0
-    
-    do i=1,5
-       do j=1,5
-          B(1:i-1,1:j-1)=A(1:i-1,1:j-1)
-          B(i:4,1:j-1)=A(i+1:5,1:j-1)
-          B(1:i-1,j:4)=A(1:i-1,j+1:5)
-          B(i:4,j:4)=A(i+1:5,j+1:5)
 
-          inv5(i,j)=(-1)**(i+j)*det4(B)
+    ! do k=1,size(A,1)
+    !    print*,A(k,:)
+    ! end do
+
+    do i=1,size(A,1)
+       do j=1,size(A,1)
+          B(1:i-1,1:j-1)=A(1:i-1,1:j-1)
+          B(i:size(A,1)-1,1:j-1)=A(i+1:size(A,1),1:j-1)
+          B(1:i-1,j:size(A,1)-1)=A(1:i-1,j+1:size(A,1))
+          B(i:size(A,1)-1,j:size(A,1)-1)=A(i+1:size(A,1),j+1:size(A,1))
+          inv(i,j)=(-1)**(i+j)*FindDet(B)
+
+          ! print*,'inversion B',i,j
+          ! do k=1,size(B,1)
+          !    print*,B(k,:)
+          ! end do
+          
 
        end do
     end do
-    inv5=transpose(inv5)
-    inv5=(1.0/det5(A))*inv5
-  end function inv5
+    inv=transpose(inv)
+    inv=(1.0/FindDet(A))*inv
+  end function inv
+
+
+  real function FindDet(A)
+    implicit none
+    real,intent(in),dimension(:,:) :: A
+    real,dimension(size(A,1),size(A,2)) :: matrix
+    integer              :: n
+    real :: m, temp
+    integer :: i, j, k, l
+    logical :: detexists = .TRUE.
+
+    matrix=A
+
+    n=size(matrix,1)
+    l = 1
+    !Convert to upper triangular form
+    DO k = 1, n-1
+       IF (matrix(k,k) == 0) THEN
+          DetExists = .FALSE.
+          DO i = k+1, n
+             IF (matrix(i,k) /= 0) THEN
+                DO j = 1, n
+                   temp = matrix(i,j)
+                   matrix(i,j)= matrix(k,j)
+                   matrix(k,j) = temp
+                END DO
+                DetExists = .TRUE.
+                l=-l
+                EXIT
+             ENDIF
+          END DO
+          IF (DetExists .EQV. .FALSE.) THEN
+             FindDet = 0
+             return
+          END IF
+       ENDIF
+       DO j = k+1, n
+          m = matrix(j,k)/matrix(k,k)
+          DO i = k+1, n
+             matrix(j,i) = matrix(j,i) - m*matrix(k,i)
+          END DO
+       END DO
+    END DO
+
+    !Calculate determinant by finding product of diagonal elements
+    FindDet = l
+    DO i = 1, n
+       FindDet = FindDet * matrix(i,i)
+    END DO
+
+  END FUNCTION FindDet
 
   subroutine init_sparse_matrix(A,NNN,nb_ligne)
     type(sparse_matrix),intent(inout) :: A
@@ -99,6 +104,7 @@ contains
     A%nb_ligne=nb_ligne
     allocate(A%Values(NNN))
     allocate(A%IA(0:nb_ligne))
+    A%IA(0)=0
     allocate(A%JA(1:NNN))
     
   end subroutine init_sparse_matrix
@@ -166,9 +172,6 @@ contains
 
     integer :: i,j
 
-
-    print*,'test',size(X),size(A%Values),A%nb_ligne
-    call print_sparse_matrix(A)
     sparse_matmul=0.0
 
     do i=1,A%nb_ligne
@@ -177,6 +180,5 @@ contains
        end do
     end do
   end function sparse_matmul
-
   
 end module m_matrix

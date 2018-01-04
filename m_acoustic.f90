@@ -80,25 +80,42 @@ contains
 
     allocate(m_loc(DoF,DoF))
 
+    ! do i=1,DoF
+    !     m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
+    !    do j=i+1,DoF
+    !       m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
+    !       m_loc(i,DoF-j+1)=m_loc(i,j)
+    !    end do
+    ! end do
+
+    
     do i=1,DoF
-        m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
-       do j=i+1,DoF
+       do j=1,DoF
           m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
-          m_loc(i,DoF-j+1)=m_loc(i,j)
        end do
     end do
 
   end subroutine init_m_loc_b
 
+    subroutine init_m_loc_l(DoF)
+    integer,intent(in) :: DoF
+    integer            :: i,j
+
+    allocate(m_loc(DoF,DoF))
+
+    ! do i=1,DoF
+    !     m_loc(i,i)=Int_lxl(base_l(i),base_l(i))
+    !    do j=i+1,DoF
+    !       m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
+    !       m_loc(i,DoF-j+1)=m_loc(i,j)
+    !    end do
+    ! end do
+
+    do i=1,DoF
+       do j=1,DoF
+          m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
+       end do
+    end do
+  end subroutine init_m_loc_l
   
-  
-    
-
-
-
-
-
-
-
-
   end module m_acoustic
