@@ -4,7 +4,7 @@ module m_acoustic
 
   implicit none
 
-  
+
 
   real,dimension(:,:),allocatable :: m_loc
   type(sparse_matrix)             :: m_global
@@ -12,8 +12,19 @@ module m_acoustic
   real,dimension(15)              :: xx,weight
 
 
+
+  public  :: m_loc,m_global,                                                    &
+             init_quadrature,                                                   &
+             init_m_loc_b,init_m_loc_l
+
+  private :: xx,weight,                                                         &
+             Int_bxb,Int_lxl
+
+
 contains
 
+
+  !****************** QUADRATURE ***********************************************
   subroutine init_quadrature
     integer :: i
     xx(1)=6.0037409897572858D-3
@@ -38,7 +49,6 @@ contains
        xx(i)=xx(16-i)
        weight(i)=weight(16-i)
     end do
-    
   end subroutine init_quadrature
 
 
@@ -49,7 +59,7 @@ contains
     integer                      :: i
 
     Int_bxb=0.0
-    
+
     do i=1,15
        Int_bxb=Int_bxb                  &
             +eval_polynom_b(bpol1,xx(i))&
@@ -63,9 +73,9 @@ contains
     type(t_polynom_l),intent(in) :: lpol2
     real                         :: Int_lxl
     integer                      :: i
-    
+
     Int_lxl=0.0
-    
+
     do i=1,15
        Int_lxl=Int_lxl                  &
             +eval_polynom_l(lpol1,xx(i))&
@@ -74,6 +84,9 @@ contains
     end do
   end function Int_lxl
 
+
+
+  !**************** MASS MATRIX ************************************************
   subroutine init_m_loc_b(DoF)
     integer,intent(in) :: DoF
     integer            :: i,j
@@ -88,7 +101,6 @@ contains
     !    end do
     ! end do
 
-    
     do i=1,DoF
        do j=1,DoF
           m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
@@ -97,7 +109,7 @@ contains
 
   end subroutine init_m_loc_b
 
-    subroutine init_m_loc_l(DoF)
+  subroutine init_m_loc_l(DoF)
     integer,intent(in) :: DoF
     integer            :: i,j
 
@@ -117,5 +129,5 @@ contains
        end do
     end do
   end subroutine init_m_loc_l
-  
-  end module m_acoustic
+
+end module m_acoustic
