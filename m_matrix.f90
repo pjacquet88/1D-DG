@@ -9,8 +9,17 @@ module m_matrix
      integer,dimension(:),allocatable :: JA
   end type sparse_matrix
 
+  public  :: sparse_matrix,                                                    &
+             inv,                                                              &
+             init_sparse_matrix,get_NNN,Full2Sparse,print_sparse_matrix,       &
+             sparse_matmul,is_sym
+
+  private :: FindDet
+
 contains
 
+
+  !************ INVERSION DIRECTE PETITE MATRICE *******************************
   function inv(A)
     real,dimension(:,:),intent(in)          :: A
     real,dimension(size(A,1),size(A,1))     :: inv
@@ -20,10 +29,6 @@ contains
     inv=0.0
     B=0.0
 
-    ! do k=1,size(A,1)
-    !    print*,A(k,:)
-    ! end do
-
     do i=1,size(A,1)
        do j=1,size(A,1)
           B(1:i-1,1:j-1)=A(1:i-1,1:j-1)
@@ -31,13 +36,6 @@ contains
           B(1:i-1,j:size(A,1)-1)=A(1:i-1,j+1:size(A,1))
           B(i:size(A,1)-1,j:size(A,1)-1)=A(i+1:size(A,1),j+1:size(A,1))
           inv(i,j)=(-1)**(i+j)*FindDet(B)
-
-          ! print*,'inversion B',i,j
-          ! do k=1,size(B,1)
-          !    print*,B(k,:)
-          ! end do
-          
-
        end do
     end do
     inv=transpose(inv)
@@ -95,6 +93,11 @@ contains
 
   END FUNCTION FindDet
 
+
+
+
+
+  !************FUNCTION SPARSE MATRIX ******************************************
   subroutine init_sparse_matrix(A,NNN,nb_ligne)
     type(sparse_matrix),intent(inout) :: A
     integer            ,intent(in)    :: NNN
@@ -154,17 +157,6 @@ contains
 
   end subroutine Full2Sparse
 
-  subroutine print_sparse_matrix(A)
-    type(sparse_matrix),intent(in) :: A
-
-    print*,'NNN :',A%NNN
-    print*,'nb_ligne :',A%nb_ligne
-    print*,'Values :',A%Values
-    print*,'IA :',A%IA
-    print*,'JA :',A%JA
-    
-  end subroutine print_sparse_matrix
-
   function sparse_matmul(A,X)
     type(sparse_matrix),intent(in) :: A
     real,dimension(:)  ,intent(in) :: X
@@ -180,5 +172,46 @@ contains
        end do
     end do
   end function sparse_matmul
+
+
+
+  !************ FONCTIONS TESTS ************************************************
+
+  subroutine print_sparse_matrix(A)
+    type(sparse_matrix),intent(in) :: A
+
+    print*,'NNN :',A%NNN
+    print*,'nb_ligne :',A%nb_ligne
+    print*,'Values :',A%Values
+    print*,'IA :',A%IA
+    print*,'JA :',A%JA
+    
+  end subroutine print_sparse_matrix
+
+  
+  subroutine is_sym(A)
+  real,dimension(:,:),intent(in) :: A
+  integer :: i,j
+  logical :: test
+
+  test=.TRUE.
+  
+  do i=1,size(A,1)
+     do j=i,size(A,1)
+
+        if (A(i,j).ne.A(j,i)) then
+           test=.FALSE.
+           exit
+        end if
+     end do
+     if (.not.test) exit
+  end do
+
+  if (test) then
+     print*,'IS SYMETRIC'
+  else
+     print*,'IS NOT SYMETRIC'
+  end if
+end subroutine is_sym
   
 end module m_matrix
