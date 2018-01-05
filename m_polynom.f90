@@ -2,8 +2,8 @@ module m_polynom
   use m_matrix
   implicit none
 
-  real,dimension(:,:),allocatable :: B2L,L2B,D0,D1
-  type(sparse_matrix),private :: D0_sparse,D1_sparse
+  real               ,dimension(:,:),allocatable :: B2L,L2B,D0,D1
+  type(sparse_matrix)                            :: D0_sparse,D1_sparse
 
   type t_polynom_b
      real,dimension(:),allocatable :: coef
@@ -17,9 +17,22 @@ module m_polynom
 
   type(t_polynom_b),dimension(:),allocatable :: base_b
   type(t_polynom_l),dimension(:),allocatable :: base_l
+  
 
-
+  public  :: t_polynom_b,t_polynom_l,base_b,base_l,                             &
+             init_polynom_b,init_polynom_l,                                     &
+             free_polynom_b,free_polynom_l,                                     &
+             eval_polynom_b,eval_polynom_l,                                     &
+             init_basis_b,init_basis_l,                                         &
+             create_L2B,create_B2L,create_derive,                               &
+             Bernstein2Lagrange,Lagrange2Bernstein
+  
+  private :: B2L,L2B,D0,D1,D0_sparse,D1_sparse,                                 &
+             fact,C,b_basis,l_basis
 contains
+
+
+!****************FONCTIONS ANNEXES**********************************************  
 
   function fact(n)
     integer,intent(in) :: n
@@ -29,9 +42,7 @@ contains
     if (n.eq.0) then
        fact=1
     else
-
        fact=n
-
        do i=n-1,2,-1
           fact=fact*i
        end do
@@ -55,7 +66,30 @@ contains
     end if
   end function C
 
-  subroutine init_basis_b(ordre)
+
+
+  
+  !****************FONCTIONS BERNSTEIN********************************************
+  
+  subroutine init_polynom_b(pol,coef)
+    type(t_polynom_b),intent(inout) :: pol
+    real,dimension(:),intent(in)    :: coef
+
+    pol%ordre=size(coef)-1
+    allocate(pol%coef(pol%ordre))
+    pol%coef=coef
+  end subroutine init_polynom_b
+   
+  function b_basis(i,j,x)
+    integer,intent(in) :: i,j
+    real,   intent(in) :: x
+    real               :: b_basis
+
+    b_basis=C(i+j,i)*x**j*(1-x)**i
+
+  end function b_basis
+
+   subroutine init_basis_b(ordre)
     integer,intent(in) :: ordre
     integer :: i
     real,dimension(ordre+1) :: coef
@@ -72,56 +106,7 @@ contains
        call init_polynom_b(base_b(i),coef)
     end do
 
-  end subroutine init_basis_b
-
-  subroutine init_basis_l(ordre)
-    integer,intent(in) :: ordre
-    integer :: i
-    real,dimension(ordre+1) :: coef
-
-    allocate(base_l(ordre+1))
-    coef=0.0
-    coef(1)=1.0
-    call init_polynom_l(base_l(1),coef)
-
-    do i=2,ordre+1
-       coef(i-1)=0.0
-       coef(i)=1.0
-       call init_polynom_l(base_l(i),coef)
-    end do
-
-  end subroutine init_basis_l
-  
-
-  function b_basis(i,j,x)
-    integer,intent(in) :: i,j
-    real,   intent(in) :: x
-    real               :: b_basis
-
-    b_basis=C(i+j,i)*x**j*(1-x)**i
-
-  end function b_basis
-
-  subroutine init_polynom_b(pol,coef)
-    type(t_polynom_b),intent(inout) :: pol
-    real,dimension(:),intent(in)    :: coef
-
-    pol%ordre=size(coef)-1
-    allocate(pol%coef(pol%ordre))
-    pol%coef=coef
-  end subroutine init_polynom_b
-
-  subroutine free_polynom_b(pol)
-    type(t_polynom_b) :: pol
-
-    deallocate(pol%coef)
-  end subroutine free_polynom_b
-
-  subroutine free_polynom_l(pol)
-    type(t_polynom_l) :: pol
-
-    deallocate(pol%coef)
-  end subroutine free_polynom_l
+  end subroutine init_basis_b  
   
   function eval_polynom_b(pol,x)
     type(t_polynom_b),intent(in) :: pol
@@ -138,8 +123,18 @@ contains
        
   end function eval_polynom_b
 
+  
+  subroutine free_polynom_b(pol)
+    type(t_polynom_b) :: pol
+
+    deallocate(pol%coef)
+  end subroutine free_polynom_b
 
 
+
+  
+  !****************FONCTIONS LAGRANGE********************************************
+  
   subroutine init_polynom_l(pol,coef)
     type(t_polynom_l),intent(inout) :: pol
     real,dimension(:),intent(in)    :: coef
@@ -172,6 +167,25 @@ contains
     end do
   end function l_basis
 
+  
+  subroutine init_basis_l(ordre)
+    integer,intent(in) :: ordre
+    integer :: i
+    real,dimension(ordre+1) :: coef
+
+    allocate(base_l(ordre+1))
+    coef=0.0
+    coef(1)=1.0
+    call init_polynom_l(base_l(1),coef)
+
+    do i=2,ordre+1
+       coef(i-1)=0.0
+       coef(i)=1.0
+       call init_polynom_l(base_l(i),coef)
+    end do
+
+  end subroutine init_basis_l
+
   function eval_polynom_l(pol,x)
     type(t_polynom_l),intent(in) :: pol
     real             ,intent(in) :: x
@@ -185,6 +199,17 @@ contains
     end do
   end function eval_polynom_l
 
+  subroutine free_polynom_l(pol)
+    type(t_polynom_l) :: pol
+
+    deallocate(pol%coef)
+  end subroutine free_polynom_l
+
+
+
+  
+  !****************FONCTIONS PASSAGES*******************************************
+  
   subroutine create_B2L
     integer :: i,j
 
@@ -202,7 +227,6 @@ subroutine Bernstein2Lagrange(bpol,lpol)
   type(t_polynom_b),intent(in) :: bpol
   type(t_polynom_l),intent(out) :: lpol
 
-
   call init_polynom_l(lpol,matmul(B2L,bpol%coef))
 
 end subroutine Bernstein2Lagrange
@@ -216,14 +240,25 @@ subroutine create_L2B
   
 end subroutine create_L2B
 
+subroutine Lagrange2Bernstein(lpol,bpol)
+  type(t_polynom_l),intent(in)  :: lpol
+  type(t_polynom_b),intent(out) :: bpol
+
+  call init_polynom_b(bpol,matmul(L2B,lpol%coef))
+
+end subroutine Lagrange2Bernstein
+
+
+
+!!****************FONCTIONS DERIVES*********************************************
+
 subroutine create_derive(ordre)
   integer,intent(in) :: ordre
   integer :: i
   real,dimension(ordre+1,ordre+1) :: test
 
   allocate(D0(ordre+1,ordre+1))
-  allocate(D1(ordre+1,ordre+1))
-  
+  allocate(D1(ordre+1,ordre+1))  
   
   D0=0.0
   D1=0.0
@@ -243,50 +278,16 @@ subroutine create_derive(ordre)
 
 end subroutine create_derive
 
-subroutine Lagrange2Bernstein(lpol,bpol)
-  type(t_polynom_l),intent(in)  :: lpol
-  type(t_polynom_b),intent(out) :: bpol
-
-  call init_polynom_b(bpol,matmul(L2B,lpol%coef))
-
-end subroutine Lagrange2Bernstein
 
 subroutine deriv_pol_b(bpol,dbpol)
   type(t_polynom_b),intent(in)  :: bpol
   type(t_polynom_b),intent(out) :: dbpol
   real,dimension(bpol%ordre+1)  :: coef
   
-  !coef=sparse_matmul(D1_sparse,bpol%coef)-sparse_matmul(D0_sparse,bpol%coef)
   coef=matmul(D1,bpol%coef)-matmul(D0,bpol%coef)
   call init_polynom_b(dbpol,coef)
 
 end subroutine deriv_pol_b
-
-subroutine is_sym(A)
-  real,dimension(:,:),intent(in) :: A
-  integer :: i,j
-  logical :: test
-
-  test=.TRUE.
-
-  do i=1,size(A,1)
-     do j=i,size(A,1)
-
-        if (A(i,j).ne.A(j,i)) then
-           test=.FALSE.
-           exit
-        end if
-     end do
-     if (.not.test) exit
-  end do
-
-  if (test) then
-     print*,'IS SYMETRIC'
-  else
-     print*,'IS NOT SYMETRIC'
-  end if
-
-end subroutine is_sym
 
 
 end module m_polynom
