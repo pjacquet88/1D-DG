@@ -4,24 +4,33 @@ module m_acoustic
 
   implicit none
 
-
-
+  type element
+     real :: length
+     real :: x_ini
+     real :: x_end
+     real,dimension(:),allocatable :: coef
+     integer :: DoF
+  end type element
+  
   real,dimension(:,:),allocatable :: m_loc
   type(sparse_matrix)             :: m_global
 
   real,dimension(15)              :: xx,weight
 
-
+  real,parameter :: PI=acos(-1.0)
 
   public  :: m_loc,m_global,                                                    &
              init_quadrature,                                                   &
-             init_m_loc_b,init_m_loc_l
+             init_m_loc_b,init_m_loc_l,                                         &
+             signal_ini
 
   private :: xx,weight,                                                         &
-             Int_bxb,Int_lxl
+             Int_bxb,Int_lxl,                                                   &
+             PI
 
 
 contains
+
 
 
   !****************** QUADRATURE ***********************************************
@@ -46,7 +55,7 @@ contains
     weight(8)=1.0128912096278064D-1
 
     do i=9,15
-       xx(i)=xx(16-i)
+       xx(i)=1.0-xx(16-i)
        weight(i)=weight(16-i)
     end do
   end subroutine init_quadrature
@@ -129,5 +138,23 @@ contains
        end do
     end do
   end subroutine init_m_loc_l
+
+  !******************* INIT PROBLEM **************************************
+
+  function signal_ini(x,a)
+    real,intent(in) :: x
+    character(len=*),intent(in) :: a
+    real                        :: signal_ini
+    
+    real                        :: f
+
+    f=25.0
+
+    if (a.eq.'sinus') then
+       signal_ini=sin(4*PI*x)
+    else if (a.eq.'ricker') then
+       signal_ini=(1.0-2.0*(PI*f*(x+0.5))**2)*exp(-(PI*f*(x+0.5))**2)
+    end if
+  end function signal_ini
 
 end module m_acoustic

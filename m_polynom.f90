@@ -25,44 +25,28 @@ module m_polynom
              eval_polynom_b,eval_polynom_l,                                     &
              init_basis_b,init_basis_l,                                         &
              create_L2B,create_B2L,create_derive,                               &
-             Bernstein2Lagrange,Lagrange2Bernstein
+             Bernstein2Lagrange,Lagrange2Bernstein,B2L
   
-  private :: B2L,L2B,D0,D1,D0_sparse,D1_sparse,                                 &
-             fact,C,b_basis,l_basis
+  private :: L2B,D0,D1,D0_sparse,D1_sparse,                                 &
+             C,b_basis,l_basis
 contains
 
 
-!****************FONCTIONS ANNEXES**********************************************  
-
-  function fact(n)
-    integer,intent(in) :: n
-    integer            :: fact
-    integer :: i
-
-    if (n.eq.0) then
-       fact=1
-    else
-       fact=n
-       do i=n-1,2,-1
-          fact=fact*i
-       end do
-    end if
-  end function fact
+!****************FONCTIONS ANNEXES**********************************************
 
   function C(n,k)
     integer,intent(in) :: n,k
     real               :: C
     integer :: i
-
+    
     if (k.eq.0) then
        C=1.0
     else
-       C=n
-       do i=n-1,n-k+1,-1
-          C=C*i
-       end do
+       C=real(n)/real(k)
 
-       C=C/fact(k)
+       do i=1,k-1
+          C=C*real(n-i)/real(i)
+       end do
     end if
   end function C
 
@@ -85,8 +69,11 @@ contains
     real,   intent(in) :: x
     real               :: b_basis
 
-    b_basis=C(i+j,i)*x**j*(1-x)**i
+    b_basis=C(i+j,i)*x**j*(1.0-x)**i
 
+    if ((x.gt.0.0).and.(b_basis.gt.1.0)) then
+       print*,'error',b_basis,i,j,x,(1.0-x),C(i+j,i),x**j,(1.0-x)**i
+    end if
   end function b_basis
 
    subroutine init_basis_b(ordre)
@@ -233,11 +220,8 @@ end subroutine Bernstein2Lagrange
 
 
 subroutine create_L2B
-  real,dimension(size(B2L,1),size(B2L,1)) :: test
-  integer :: i
-
-  L2B=inv(B2L)
-  
+! L2B=inv(B2L)
+  L2B=LU_inv(B2L)
 end subroutine create_L2B
 
 subroutine Lagrange2Bernstein(lpol,bpol)
@@ -273,6 +257,13 @@ subroutine create_derive(ordre)
      D1(i+1,i)=real(i)
   end do
 
+  test=D1-D0
+
+  ! print*,'test'
+  ! do i=1,ordre+1
+  !    print*,test(i,:)
+  ! end do
+
   call Full2Sparse(D0,D0_sparse)
   call Full2Sparse(D1,D1_sparse)
 
@@ -284,7 +275,8 @@ subroutine deriv_pol_b(bpol,dbpol)
   type(t_polynom_b),intent(out) :: dbpol
   real,dimension(bpol%ordre+1)  :: coef
   
-  coef=matmul(D1,bpol%coef)-matmul(D0,bpol%coef)
+  !coef=matmul(D1,bpol%coef)-matmul(D0,bpol%coef)
+  coef=sparse_matmul(D1_sparse,bpol%coef)-sparse_matmul(D0_sparse,bpol%coef)
   call init_polynom_b(dbpol,coef)
 
 end subroutine deriv_pol_b
