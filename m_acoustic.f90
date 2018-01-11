@@ -10,16 +10,18 @@ module m_acoustic
      real :: x_end
      real,dimension(:),allocatable :: coef
      integer :: DoF
+     logical :: bernstein
   end type element
   
   real,dimension(:,:),allocatable :: m_loc
-  type(sparse_matrix)             :: m_global
+  real,dimension(:,:),allocatable :: m_loc_l,m_loc_b
+  real,dimension(:,:),allocatable :: m_inv_loc_l,m_inv_loc_b
 
   real,dimension(15)              :: xx,weight
 
   real,parameter :: PI=acos(-1.0)
 
-  public  :: m_loc,m_global,                                                    &
+  public  :: m_loc,                                                             &
              init_quadrature,                                                   &
              init_m_loc_b,init_m_loc_l,                                         &
              signal_ini
@@ -152,9 +154,82 @@ contains
 
     if (a.eq.'sinus') then
        signal_ini=sin(4*PI*x)
-    else if (a.eq.'ricker') then
-       signal_ini=(1.0-2.0*(PI*f*(x+0.5))**2)*exp(-(PI*f*(x+0.5))**2)
+    else
+       signal_ini=(x-0.5)*exp(-(2.0*PI*(x-0.5)*2.0)**2.0)
     end if
   end function signal_ini
 
+
+  subroutine init_element(elem,nb_elem,DoF,signal,total_length,bernstein)
+    type(element),dimension(nb_elem),intent(inout) :: elem
+    integer                         ,intent(in)    :: nb_elem
+    integer                         ,intent(in)    :: DoF
+    logical                         ,intent(in)    :: bernstein
+    character(len=*)                ,intent(in)    :: signal
+    real                            ,intent(in)    :: total_length
+
+    integer :: i,j
+    real    :: x
+
+    elem(1)%length=total_length/nb_elem
+    elem(1)%x_ini=0.0
+    elem(1)%x_end=elem(1)%length
+    elem(1)%DoF=DoF
+    allocate(elem(1)%coef(DoF))
+    elem(1)%bernstein=bernstein
+    
+    do j=1,elem(1)%DoF
+       x=elem(1)%x_ini+(j-1)*elem(1)%length/(elem(1)%DoF-1)
+       elem(1)%coef(j)=signal_ini(x,signal)
+    end do
+
+    do i=2,nb_elem
+       elem(i)%length=elem(i-1)%length
+       elem(i)%x_ini=elem(i-1)%x_end
+       elem(i)%x_end=elem(i)%x_ini+elem(i)%length
+       elem(i)%DoF=elem(i-1)%DoF
+       allocate(elem(i)%coef(DoF))
+       elem(i)%bernstein=bernstein
+       
+       do j=1,elem(i)%DoF
+          x=elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1)
+          elem(i)%coef(j)=signal_ini(x,signal)
+       end do
+    end do
+
+    print*,'test',signal
+    
+  end subroutine init_element
+
+  subroutine print_sol(elem,N)
+    type(element),dimension(:),intent(in) :: elem
+    integer                   ,intent(in) :: N
+    real,dimension(:),allocatable         :: coef
+
+    integer :: i,j
+    character(len=20) :: F_NAME
+
+    
+    write(F_NAME,"(A,I0,'.dat')") "sol",N
+
+    open(unit=2, file=F_NAME, action="write")
+
+
+    
+    do i=1,size(elem)
+       if (elem(i)%bernstein) then
+          allocate(coef(elem(i)%DoF))
+          coef=matmul(L2B,elem(i)%coef)
+          do j=1,elem(i)%DoF
+             write(2,*),elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1),coef(j)
+          end do
+          deallocate(coef)
+       else
+          do j=1,elem(i)%DoF
+             write(2,*),elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1),elem(i)%coef(j)
+          end do
+       end if
+    end do
+  end subroutine print_sol
+  
 end module m_acoustic
