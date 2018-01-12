@@ -11,10 +11,11 @@ program main
 
   real,parameter      :: h=1.0/10000.0
 
-  integer,parameter   :: nb_elem=100
-  integer,parameter   :: ordre=15,DoF=ordre+1
-  real   ,parameter   :: total_length=1.0
-  type(element),dimension(nb_elem) :: elem
+  integer,parameter      :: nb_elem=100
+  integer,parameter      :: ordre=3,DoF=ordre+1
+  real   ,parameter      :: total_length=1.0
+  real   ,parameter      :: final_time=10.0
+  type(acoustic_problem) :: problem
 
   real,dimension(DoF) :: coef_test_b,coef_test_l
 
@@ -119,18 +120,28 @@ program main
 
 
   call system('gnuplot script_test_derive.gnu')
-  call system('eog derive.png &')
+  !call system('eog derive.png &')
 
   !*************************************************************************
   !********************* SIMULATION EQUATION ACOUSTIQUE*********************
 
   
+  call init_quadrature
+  call init_problem(problem,nb_elem,DoF,total_length,final_time,.false.,'sinus')
+  call print_sol(problem,1)
 
-   call init_element(elem,nb_elem,DoF,'sinus',total_length,.false.)
-   call print_sol(elem,1)
+
+  call init_m_loc_l(m_loc_l,m_inv_loc_l,DoF)
+  call init_m_loc_b(m_loc_b,DoF)
+  call init_s_loc_l(s_loc_l,DoF)
+
+  print*,'test m_inv_l'
+  do i=1,DoF
+     print*,m_inv_loc_l(i,:)
+  end do
+
+
   
-
-
   print*,'done'
-
+  
 end program main

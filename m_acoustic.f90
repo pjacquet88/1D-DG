@@ -4,18 +4,24 @@ module m_acoustic
 
   implicit none
 
-  type element
-     real :: length
-     real :: x_ini
-     real :: x_end
-     real,dimension(:),allocatable :: coef
-     integer :: DoF
-     logical :: bernstein
-  end type element
+  type acoustic_problem
+     integer                       :: DoF
+     integer                       :: nb_elem
+     logical                       :: bernstein
+     real                          :: dx
+     real                          :: dt
+     real                          :: total_length
+     real                          :: final_time
+     real,dimension(:),allocatable :: U
+     real,dimension(:),allocatable :: P
+  end type acoustic_problem
   
   real,dimension(:,:),allocatable :: m_loc
   real,dimension(:,:),allocatable :: m_loc_l,m_loc_b
+  real,dimension(:,:),allocatable :: s_loc_l
+  real,dimension(:,:),allocatable :: s_glob_l
   real,dimension(:,:),allocatable :: m_inv_loc_l,m_inv_loc_b
+  real,dimension(:)  ,allocatable :: U_work,P_work
 
   real,dimension(15)              :: xx,weight
 
@@ -98,138 +104,254 @@ contains
 
 
   !**************** MASS MATRIX ************************************************
-  subroutine init_m_loc_b(DoF)
-    integer,intent(in) :: DoF
-    integer            :: i,j
+  subroutine init_m_loc_b(m_loc,DoF)
+    real,dimension(:,:),allocatable,intent(out) :: m_loc
+    integer                        ,intent(in)  :: DoF
+    
+    integer:: i,j
 
     allocate(m_loc(DoF,DoF))
 
-    ! do i=1,DoF
-    !     m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
-    !    do j=i+1,DoF
-    !       m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
-    !       m_loc(i,DoF-j+1)=m_loc(i,j)
-    !    end do
-    ! end do
-
     do i=1,DoF
-       do j=1,DoF
+        m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
+       do j=i+1,DoF
           m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
+          m_loc(j,i)=m_loc(i,j)
        end do
     end do
 
   end subroutine init_m_loc_b
 
-  subroutine init_m_loc_l(DoF)
-    integer,intent(in) :: DoF
-    integer            :: i,j
+  subroutine init_m_loc_l(m_loc,m_inv,DoF)
+    real,dimension(:,:),allocatable,intent(out) :: m_loc
+    real,dimension(:,:),allocatable,intent(out) :: m_inv
+    integer                        ,intent(in)  :: DoF
+    
+    integer :: i,j
 
     allocate(m_loc(DoF,DoF))
-
-    ! do i=1,DoF
-    !     m_loc(i,i)=Int_lxl(base_l(i),base_l(i))
-    !    do j=i+1,DoF
-    !       m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
-    !       m_loc(i,DoF-j+1)=m_loc(i,j)
-    !    end do
-    ! end do
+    allocate(m_inv(DoF,DoF))
 
     do i=1,DoF
-       do j=1,DoF
+        m_loc(i,i)=Int_lxl(base_l(i),base_l(i))
+       do j=i+1,DoF
           m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
+          m_loc(j,i)=m_loc(i,j)
        end do
     end do
+
+    m_inv=LU_inv(m_loc)
+
   end subroutine init_m_loc_l
 
+  subroutine init_s_loc_l(s_loc_l,DoF)
+    real,dimension(:,:),allocatable,intent(out) :: s_loc_l
+    integer                        ,intent(in) :: DoF
+
+    integer :: i,j
+    type(t_polynom_b) :: bpol,dbpol
+    type(t_polynom_l) :: dlpol
+
+    allocate(s_loc_l(DoF,DoF))
+
+    do i=1,DoF
+       do j=i,DoF
+          call Lagrange2Bernstein(base_l(j),bpol)
+          call deriv_pol_b(bpol,dbpol)
+          call Bernstein2Lagrange(dbpol,dlpol)
+
+          s_loc_l(i,j)=Int_lxl(base_l(i),dlpol)
+
+          if (j.ne.i) then
+             s_loc_l(j,i)=s_loc_l(i,j)
+          end if
+       end do
+    end do
+  end subroutine init_s_loc_l
+
+
+  function apply_block(m,v)
+    real,intent(in),dimension(:,:) :: m
+    real,intent(in),dimension(:)   :: v
+
+    real,dimension(size(v)) :: apply_block
+
+    integer :: nb_elem
+    integer :: DoF
+    integer :: i
+
+    if (modulo(size(v),size(m,1)).ne.0) then
+       print*,'ERROR MATRICE & VECTOR SIZES',size(m,1),size(v)
+    end if
+
+    DoF=size(m,1)
+    nb_elem=size(v)/DoF
+
+    do i=1,nb_elem
+       apply_block(DoF*(i-1)+1:DoF*i)=matmul(m,v(DoF*(i-1)+1:DoF*i))
+    end do
+  end function apply_block
+
+  subroutine init_stifness(s_glob_sparse,s_loc,nb_elem,DoF,boundaries,bernstein)
+    type(sparse_matrix)    ,intent(out) :: s_glob_sparse
+    real,dimension(DoF,DoF),intent(in)  :: s_loc
+    integer                ,intent(in)  :: nb_elem
+    integer                ,intent(in)  :: DoF
+    character(len=*)       ,intent(in)  :: boundaries
+    logical                ,intent(in)  :: bernstein
+
+    real,dimension(nb_elem*DoF,nb_elem*DoF) :: s_glob
+
+    integer :: i
+
+    s_glob=0.0
+
+    if (bernstein) then
+       print*,'La résolution pour Bernstein n est pas encore implementée'
+       STOP
+    else
+
+       do i=1,nb_elem
+          s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
+       end do
+    end if
+
+    if (boundaries.eq.'periodique') then
+       s_glob(1,1)=s_glob(1,1)+0.5
+       s_glob(1,DoF*nb_elem)=s_glob(1,DoF*nb_elem)-0.5
+
+       s_glob(DoF,DoF)=s_glob(DoF,DoF)-0.5
+       s_glob(DoF,DoF+1)=s_glob(DoF,DoF+1)+0.5
+
+       do i=2,nb_elem-1
+          s_glob(Dof*(i-1)+1,Dof*(i-1)+1)=s_glob(Dof*(i-1)+1,Dof*(i-1)+1)+0.5
+          s_glob(Dof*(i-1)+1,Dof*(i-1))=s_glob(Dof*(i-1)+1,Dof*(i-1)+1)-0.5
+
+          s_glob(Dof*i,Dof*i)=s_glob(Dof*i,Dof*i)-0.5
+          s_glob(Dof*i,Dof*i+1)=s_glob(Dof*i,Dof*i)+0.5
+       end do
+
+       s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)+0.5
+       s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)-0.5
+
+       s_glob(Dof*nb_elem,Dof*nb_elem)=s_glob(Dof*nb_elem,Dof*nb_elem)-0.5
+       s_glob(Dof*nb_elem,1)=s_glob(Dof*nb_elem,1)+0.5
+
+    else
+       print*,'Aucune autre condition n a été implementée'
+    end if
+
+    call Full2Sparse(s_glob,s_glob_sparse)
+
+  end subroutine init_stifness
+
+
+  
   !******************* INIT PROBLEM **************************************
 
-  function signal_ini(x,a)
+  function signal_ini(x,dt,a)
     real,intent(in) :: x
+    real,intent(in) :: dt
     character(len=*),intent(in) :: a
     real                        :: signal_ini
     
-    real                        :: f
-
-    f=25.0
-
+    real                        :: xt
+    
+    xt=x+dt
+    
     if (a.eq.'sinus') then
-       signal_ini=sin(4*PI*x)
+       signal_ini=sin(4*PI*xt)
     else
-       signal_ini=(x-0.5)*exp(-(2.0*PI*(x-0.5)*2.0)**2.0)
+       signal_ini=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)
     end if
   end function signal_ini
 
 
-  subroutine init_element(elem,nb_elem,DoF,signal,total_length,bernstein)
-    type(element),dimension(nb_elem),intent(inout) :: elem
-    integer                         ,intent(in)    :: nb_elem
-    integer                         ,intent(in)    :: DoF
-    logical                         ,intent(in)    :: bernstein
-    character(len=*)                ,intent(in)    :: signal
-    real                            ,intent(in)    :: total_length
-
-    integer :: i,j
-    real    :: x
-
-    elem(1)%length=total_length/nb_elem
-    elem(1)%x_ini=0.0
-    elem(1)%x_end=elem(1)%length
-    elem(1)%DoF=DoF
-    allocate(elem(1)%coef(DoF))
-    elem(1)%bernstein=bernstein
+  subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,          &
+                          bernstein,signal)
+    type(acoustic_problem),intent(out) :: problem
+    integer               ,intent(in)  :: nb_elem
+    integer               ,intent(in)  :: DoF
+    real                  ,intent(in)  :: total_length
+    real                  ,intent(in)  :: final_time
+    logical               ,intent(in)  :: bernstein
+    character(len=*)      ,intent(in)  :: signal
     
-    do j=1,elem(1)%DoF
-       x=elem(1)%x_ini+(j-1)*elem(1)%length/(elem(1)%DoF-1)
-       elem(1)%coef(j)=signal_ini(x,signal)
-    end do
+    integer :: i,j
+    real    :: x,ddx
 
-    do i=2,nb_elem
-       elem(i)%length=elem(i-1)%length
-       elem(i)%x_ini=elem(i-1)%x_end
-       elem(i)%x_end=elem(i)%x_ini+elem(i)%length
-       elem(i)%DoF=elem(i-1)%DoF
-       allocate(elem(i)%coef(DoF))
-       elem(i)%bernstein=bernstein
-       
-       do j=1,elem(i)%DoF
-          x=elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1)
-          elem(i)%coef(j)=signal_ini(x,signal)
+    problem%DoF=DoF
+    problem%nb_elem=nb_elem
+    problem%total_length=total_length
+    problem%dx=total_length/(nb_elem)
+    problem%bernstein=bernstein
+
+    problem%dt=2.05*(0.0682*problem%dx)
+
+    allocate(problem%U(DoF*nb_elem),problem%P(DoF*nb_elem))
+    problem%U=0.0
+    problem%P=0.0
+
+    ddx=problem%dx/(DoF-1)
+    print*,'test',ddx*nb_elem*DoF,problem%dx*nb_elem
+    x=0.0
+
+    do i=1,nb_elem
+       do j=1,DoF
+          x=(i-1)*problem%dx+(j-1)*ddx
+          problem%U((i-1)*DoF+j)=signal_ini(x,0.0,signal)
+          problem%P((i-1)*DoF+j)=signal_ini(x,-problem%dt,signal)
        end do
     end do
 
-    print*,'test',signal
-    
-  end subroutine init_element
-
-  subroutine print_sol(elem,N)
-    type(element),dimension(:),intent(in) :: elem
-    integer                   ,intent(in) :: N
-    real,dimension(:),allocatable         :: coef
-
-    integer :: i,j
-    character(len=20) :: F_NAME
+    if (bernstein) then
+       do i=1,nb_elem
+          problem%U(Dof*(i-1)+1:Dof*i)=matmul(L2B,problem%U(Dof*(i-1)+1:Dof*i))
+          problem%P(Dof*(i-1)+1:Dof*i)=matmul(L2B,problem%P(Dof*(i-1)+1:Dof*i))
+       end do
+    end if
 
     
-    write(F_NAME,"(A,I0,'.dat')") "sol",N
-
-    open(unit=2, file=F_NAME, action="write")
-
-
     
-    do i=1,size(elem)
-       if (elem(i)%bernstein) then
-          allocate(coef(elem(i)%DoF))
-          coef=matmul(L2B,elem(i)%coef)
-          do j=1,elem(i)%DoF
-             write(2,*),elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1),coef(j)
-          end do
-          deallocate(coef)
-       else
-          do j=1,elem(i)%DoF
-             write(2,*),elem(i)%x_ini+(j-1)*elem(i)%length/(elem(i)%DoF-1),elem(i)%coef(j)
-          end do
-       end if
-    end do
-  end subroutine print_sol
+  end subroutine init_problem
   
+  subroutine print_sol(problem,N)
+    type(acoustic_problem),intent(in) :: problem
+    integer      ,intent(in) :: N
+    
+    integer :: i,j
+    character(len=20)           :: F_NAME_U,F_NAME_P
+    real                        :: x,ddx
+    real,dimension(problem%DoF) :: U_work,P_work
+
+    ddx=problem%dx/(problem%DoF-1)
+    x=0.0
+
+
+    write(F_NAME_U,"(A,I0,'.dat')") "fichier/U",N
+    write(F_NAME_P,"(A,I0,'.dat')") "fichier/P",N
+
+    open(unit=2, file=F_NAME_U, action="write")
+    open(unit=3, file=F_NAME_P, action="write")
+
+    if (problem%bernstein) then
+       do i=1,problem%nb_elem
+          U_work=matmul(B2L,problem%U(problem%Dof*(i-1)+1:problem%Dof*i))
+          P_work=matmul(B2L,problem%P(problem%Dof*(i-1)+1:problem%Dof*i))
+          do j=1,problem%DoF
+             write(2,*),x,U_work(j)
+             write(3,*),x,P_work(j)
+          end do
+       end do
+    else
+       do i=1,problem%nb_elem
+          do j=1,problem%DoF
+             x=(i-1)*problem%dx+(j-1)*ddx
+             write(2,*),x,problem%U((i-1)*problem%DoF+j)
+             write(3,*),x,problem%P((i-1)*problem%DoF+j)
+          end do
+       end do
+    end if
+  end subroutine print_sol
+
 end module m_acoustic
