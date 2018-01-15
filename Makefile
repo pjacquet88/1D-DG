@@ -14,4 +14,4 @@ run: m_matrix.o m_polynom.o m_acoustic.o main.o
 	$(FC) $(CFLAGS) $^ -o $@  $(LDFLAG)
 
 clean:
-	rm -f *.o *.mod *~ *.png fort.* *.dat run
+	rm -f *.o *.mod *~ *.png fort.* *.dat fichier/* run

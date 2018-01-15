@@ -19,7 +19,7 @@ module m_acoustic
   real,dimension(:,:),allocatable :: m_loc
   real,dimension(:,:),allocatable :: m_loc_l,m_loc_b
   real,dimension(:,:),allocatable :: s_loc_l
-  real,dimension(:,:),allocatable :: s_glob_l
+  type(sparse_matrix)             :: Av,Ap
   real,dimension(:,:),allocatable :: m_inv_loc_l,m_inv_loc_b
   real,dimension(:)  ,allocatable :: U_work,P_work
 
@@ -146,7 +146,7 @@ contains
 
   subroutine init_s_loc_l(s_loc_l,DoF)
     real,dimension(:,:),allocatable,intent(out) :: s_loc_l
-    integer                        ,intent(in) :: DoF
+    integer                        ,intent(in)  :: DoF
 
     integer :: i,j
     type(t_polynom_b) :: bpol,dbpol
@@ -155,16 +155,13 @@ contains
     allocate(s_loc_l(DoF,DoF))
 
     do i=1,DoF
-       do j=i,DoF
+       do j=1,DoF
           call Lagrange2Bernstein(base_l(j),bpol)
           call deriv_pol_b(bpol,dbpol)
           call Bernstein2Lagrange(dbpol,dlpol)
 
           s_loc_l(i,j)=Int_lxl(base_l(i),dlpol)
 
-          if (j.ne.i) then
-             s_loc_l(j,i)=s_loc_l(i,j)
-          end if
        end do
     end do
   end subroutine init_s_loc_l
@@ -192,15 +189,17 @@ contains
     end do
   end function apply_block
 
-  subroutine init_stifness(s_glob_sparse,s_loc,nb_elem,DoF,boundaries,bernstein)
-    type(sparse_matrix)    ,intent(out) :: s_glob_sparse
+  subroutine init_stiffness(Av,Ap,m_inv_loc,s_loc,nb_elem,DoF,boundaries,bernstein)
+    type(sparse_matrix)    ,intent(out) :: Av
+    type(sparse_matrix)    ,intent(out) :: Ap
+    real,dimension(DoF,DoF),intent(in)  :: m_inv_loc
     real,dimension(DoF,DoF),intent(in)  :: s_loc
     integer                ,intent(in)  :: nb_elem
     integer                ,intent(in)  :: DoF
     character(len=*)       ,intent(in)  :: boundaries
     logical                ,intent(in)  :: bernstein
 
-    real,dimension(nb_elem*DoF,nb_elem*DoF) :: s_glob
+    real,dimension(nb_elem*DoF,nb_elem*DoF) :: Av_full,Ap_full,MINV,s_glob
 
     integer :: i
 
@@ -230,7 +229,6 @@ contains
           s_glob(Dof*i,Dof*i)=s_glob(Dof*i,Dof*i)-0.5
           s_glob(Dof*i,Dof*i+1)=s_glob(Dof*i,Dof*i)+0.5
        end do
-
        s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)+0.5
        s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=s_glob(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)-0.5
 
@@ -241,9 +239,29 @@ contains
        print*,'Aucune autre condition n a été implementée'
     end if
 
-    call Full2Sparse(s_glob,s_glob_sparse)
+    s_glob=transpose(s_glob)
+    MINV=0.0
 
-  end subroutine init_stifness
+    do i=1,nb_elem
+       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
+    end do
+
+
+
+    Av_full=matmul(MINV,s_glob)
+
+
+    do i=1,size(MINV,1)
+       write(22,*) Av_full(i,:)
+    end do
+    
+    call Full2Sparse(Av_full,Av)
+    Ap=Av
+    
+    
+    ! call Full2Sparse(s_glob,s_glob_sparse)
+
+  end subroutine init_stiffness
 
 
   
@@ -262,7 +280,7 @@ contains
     if (a.eq.'sinus') then
        signal_ini=sin(4*PI*xt)
     else
-       signal_ini=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)
+       signal_ini=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
     end if
   end function signal_ini
 
@@ -293,7 +311,6 @@ contains
     problem%P=0.0
 
     ddx=problem%dx/(DoF-1)
-    print*,'test',ddx*nb_elem*DoF,problem%dx*nb_elem
     x=0.0
 
     do i=1,nb_elem
@@ -354,4 +371,18 @@ contains
     end if
   end subroutine print_sol
 
+
+  subroutine one_time_step(problem)
+    type(acoustic_problem),intent(inout) :: problem
+
+    problem%U=problem%U+problem%dt/problem%dx*(sparse_matmul(Av,problem%P))
+    problem%P=problem%P+problem%dt/problem%dx*(sparse_matmul(Ap,problem%U))    
+
+    ! problem%U=problem%U+problem%dt*(sparse_matmul(Av,problem%P))
+    ! problem%P=problem%P+problem%dt*(sparse_matmul(Ap,problem%U))    
+
+    
+  end subroutine one_time_step
+
+  
 end module m_acoustic
