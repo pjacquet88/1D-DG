@@ -13,7 +13,7 @@ program main
   real,parameter      :: h=1.0/10000.0
 
   integer         ,parameter :: nb_elem=100
-  integer         ,parameter :: ordre=3,DoF=ordre+1
+  integer         ,parameter :: ordre=6,DoF=ordre+1
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=1.0
   character(len=*),parameter :: signal='plop'
@@ -141,8 +141,8 @@ program main
 
   call init_m_loc_l(m_loc_l,m_inv_loc_l,DoF)
   call init_m_loc_b(m_loc_b,DoF)
-  call init_s_loc_l(s_loc_l,DoF)
-  call init_stiffness(Av,Ap,m_inv_loc_l,s_loc_l,nb_elem,DoF,boundaries,bernstein)
+  call init_s_loc(s_loc,DoF,bernstein)
+  call init_stiffness(Av,Ap,m_inv_loc_l,s_loc,nb_elem,DoF,boundaries,bernstein)
 
   n_time_step=int(final_time/problem%dt)
   print*,'il y aura :',n_time_step,'time _step'

@@ -25,9 +25,9 @@ module m_polynom
              eval_polynom_b,eval_polynom_l,                                     &
              init_basis_b,init_basis_l,                                         &
              create_L2B,create_B2L,create_derive,                               &
-             Bernstein2Lagrange,Lagrange2Bernstein,B2L,L2B
+             Bernstein2Lagrange,Lagrange2Bernstein,B2L,L2B,D1,D0
   
-  private :: D0,D1,D0_sparse,D1_sparse,                                 &
+  private :: D0_sparse,D1_sparse,                                 &
              C,b_basis,l_basis
 contains
 

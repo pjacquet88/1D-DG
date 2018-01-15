@@ -18,7 +18,7 @@ module m_acoustic
   
   real,dimension(:,:),allocatable :: m_loc
   real,dimension(:,:),allocatable :: m_loc_l,m_loc_b
-  real,dimension(:,:),allocatable :: s_loc_l
+  real,dimension(:,:),allocatable :: s_loc
   type(sparse_matrix)             :: Av,Ap
   real,dimension(:,:),allocatable :: m_inv_loc_l,m_inv_loc_b
   real,dimension(:)  ,allocatable :: U_work,P_work
@@ -143,51 +143,33 @@ contains
     m_inv=LU_inv(m_loc)
 
   end subroutine init_m_loc_l
-
-  subroutine init_s_loc_l(s_loc_l,DoF)
-    real,dimension(:,:),allocatable,intent(out) :: s_loc_l
+  
+  subroutine init_s_loc(s_loc,DoF,bernstein)
+    real,dimension(:,:),allocatable,intent(out) :: s_loc
     integer                        ,intent(in)  :: DoF
+    logical                        ,intent(in)  :: bernstein
 
     integer :: i,j
     type(t_polynom_b) :: bpol,dbpol
     type(t_polynom_l) :: dlpol
 
-    allocate(s_loc_l(DoF,DoF))
+    allocate(s_loc(DoF,DoF))
 
-    do i=1,DoF
-       do j=1,DoF
-          call Lagrange2Bernstein(base_l(j),bpol)
-          call deriv_pol_b(bpol,dbpol)
-          call Bernstein2Lagrange(dbpol,dlpol)
+    if (bernstein) then
+       s_loc=D1-D0
+    else
+       do i=1,DoF
+          do j=1,DoF
+             call Lagrange2Bernstein(base_l(j),bpol)
+             call deriv_pol_b(bpol,dbpol)
+             call Bernstein2Lagrange(dbpol,dlpol)
 
-          s_loc_l(i,j)=Int_lxl(base_l(i),dlpol)
+             s_loc(i,j)=Int_lxl(base_l(i),dlpol)
 
+          end do
        end do
-    end do
-  end subroutine init_s_loc_l
-
-
-  function apply_block(m,v)
-    real,intent(in),dimension(:,:) :: m
-    real,intent(in),dimension(:)   :: v
-
-    real,dimension(size(v)) :: apply_block
-
-    integer :: nb_elem
-    integer :: DoF
-    integer :: i
-
-    if (modulo(size(v),size(m,1)).ne.0) then
-       print*,'ERROR MATRICE & VECTOR SIZES',size(m,1),size(v)
     end if
-
-    DoF=size(m,1)
-    nb_elem=size(v)/DoF
-
-    do i=1,nb_elem
-       apply_block(DoF*(i-1)+1:DoF*i)=matmul(m,v(DoF*(i-1)+1:DoF*i))
-    end do
-  end function apply_block
+  end subroutine init_s_loc
 
   subroutine init_stiffness(Av,Ap,m_inv_loc,s_loc,nb_elem,DoF,boundaries,bernstein)
     type(sparse_matrix)    ,intent(out) :: Av
@@ -205,15 +187,9 @@ contains
 
     s_glob=0.0
 
-    if (bernstein) then
-       print*,'La résolution pour Bernstein n est pas encore implementée'
-       STOP
-    else
-
-       do i=1,nb_elem
-          s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
-       end do
-    end if
+    do i=1,nb_elem
+       s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
+    end do
 
     if (boundaries.eq.'periodique') then
        s_glob(1,1)=s_glob(1,1)+0.5
@@ -240,24 +216,26 @@ contains
     end if
 
     s_glob=transpose(s_glob)
-    MINV=0.0
 
-    do i=1,nb_elem
-       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
-    end do
+    if (bernstein) then
+       Av_full=s_glob
+       Ap_full=s_glob
+
+    else
+       MINV=0.0
+
+       do i=1,nb_elem
+          MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
+       end do
+
+       Av_full=matmul(MINV,s_glob)
 
 
+    end if
 
-    Av_full=matmul(MINV,s_glob)
-
-
-    do i=1,size(MINV,1)
-       write(22,*) Av_full(i,:)
-    end do
-    
     call Full2Sparse(Av_full,Av)
     Ap=Av
-    
+
     
     ! call Full2Sparse(s_glob,s_glob_sparse)
 
@@ -304,7 +282,7 @@ contains
     problem%dx=total_length/(nb_elem)
     problem%bernstein=bernstein
 
-    problem%dt=2.05*(0.0682*problem%dx)
+    problem%dt=2.05*(0.0682*problem%dx)/5
 
     allocate(problem%U(DoF*nb_elem),problem%P(DoF*nb_elem))
     problem%U=0.0
@@ -356,6 +334,7 @@ contains
           U_work=matmul(B2L,problem%U(problem%Dof*(i-1)+1:problem%Dof*i))
           P_work=matmul(B2L,problem%P(problem%Dof*(i-1)+1:problem%Dof*i))
           do j=1,problem%DoF
+             x=(i-1)*problem%dx+(j-1)*ddx
              write(2,*),x,U_work(j)
              write(3,*),x,P_work(j)
           end do
