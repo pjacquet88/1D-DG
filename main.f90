@@ -37,7 +37,6 @@ program main
   seed(:) = values(8)
   call random_seed(put=seed)
   
-
   call init_basis_b(ordre)
   call init_basis_l(ordre)
 
@@ -48,16 +47,11 @@ program main
   !*************************************************************************
   !********************* SIMULATION EQUATION ACOUSTIQUE*********************
 
-  call init_quadrature
-  call init_problem(problem,nb_elem,DoF,total_length,final_time,bernstein,signal)
+  call init_problem(problem,nb_elem,DoF,total_length,final_time,bernstein,signal,boundaries)
   call print_sol(problem,0)
-
-
-  call init_m_loc(m_loc,m_inv_loc,DoF,bernstein)
-  call init_s_loc(s_loc,DoF,bernstein)
-  call init_stiffness(Av,Ap,m_inv_loc,s_loc,nb_elem,DoF,boundaries,bernstein,problem)
-
-  print*,'le pas d espace est de :',problem%dx
+  
+  call init_ApAv(problem)
+  
   n_time_step=int(final_time/problem%dt)
   print*,'il y aura :',n_time_step,'time _step'
 
@@ -81,9 +75,9 @@ program main
   write(78,*),'a=',1
   write(78,*),'load "trace2.gnuplot"'
   close(78)
-
-  call system('gnuplot5 script.gnuplot')
   
+  call system('gnuplot5 script.gnuplot')
+  call system ('eog animate.gif &')
   print*,'done'
   
 end program main

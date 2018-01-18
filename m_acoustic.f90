@@ -14,28 +14,23 @@ module m_acoustic
      real                          :: final_time
      real,dimension(:),allocatable :: U
      real,dimension(:),allocatable :: P
+     character(len=20)             :: boundaries
+     character(len=20)             :: signal
+     type(sparse_matrix)           :: Ap
+     type(sparse_matrix)           :: Av
   end type acoustic_problem
-  
-  real,dimension(:,:),allocatable :: m_loc
-  real,dimension(:,:),allocatable :: m_inv_loc
-  real,dimension(:,:),allocatable :: s_loc
-  type(sparse_matrix)             :: Av,Ap
-  
-  real,dimension(:)  ,allocatable :: U_work,P_work
 
   real,dimension(15)              :: xx,weight
 
   real,parameter :: PI=acos(-1.0)
 
-  public  :: m_loc,                                                             &
-             init_quadrature,                                                   &
-             init_m_loc,                                                        &
-             signal_ini
+  public  :: init_problem,one_time_step,init_ApAv,                              &
+             signal_ini,                                                        &
+             print_vect,print_sol
 
   private :: xx,weight,                                                         &
-             Int_bxb,Int_lxl,                                                   &
+             init_quadrature,Int_bxb,Int_lxl, init_m_loc,init_s_loc,            &
              PI
-
 
 contains
 
@@ -102,206 +97,7 @@ contains
   end function Int_lxl
 
 
-
-  !**************** MASS MATRIX ************************************************
-
-  subroutine init_m_loc(m_loc,m_inv_loc,DoF,bernstein)
-    real,dimension(:,:),allocatable,intent(out) :: m_loc
-    real,dimension(:,:),allocatable,intent(out) :: m_inv_loc
-    integer                        ,intent(in)  :: DoF
-    logical                        ,intent(in)  :: bernstein
-
-    integer :: i,j
-
-    allocate(m_loc(DoF,DoF))
-    allocate(m_inv_loc(DoF,DoF))
-
-    if (bernstein) then
-       do i=1,DoF
-          m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
-          do j=i+1,DoF
-             m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
-             m_loc(j,i)=m_loc(i,j)
-          end do
-       end do
-    else
-       do i=1,DoF
-          m_loc(i,i)=Int_lxl(base_l(i),base_l(i))
-          do j=i+1,DoF
-             m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
-             m_loc(j,i)=m_loc(i,j)
-          end do
-       end do
-    end if
-    
-    m_inv_loc=LU_inv(m_loc)
-
-  end subroutine init_m_loc
-  
-  subroutine init_s_loc(s_loc,DoF,bernstein)
-    real,dimension(:,:),allocatable,intent(out) :: s_loc
-    integer                        ,intent(in)  :: DoF
-    logical                        ,intent(in)  :: bernstein
-
-    integer :: i,j
-    type(t_polynom_b) :: bpol,dbpol
-    type(t_polynom_l) :: dlpol
-
-    allocate(s_loc(DoF,DoF))
-
-    if (bernstein) then
-       s_loc=D1-D0
-    else
-       do i=1,DoF
-          do j=1,DoF
-             call Lagrange2Bernstein(base_l(j),bpol)
-             call deriv_pol_b(bpol,dbpol)
-             call Bernstein2Lagrange(dbpol,dlpol)
-
-             s_loc(i,j)=Int_lxl(base_l(i),dlpol)
-
-          end do
-       end do
-    end if
-  end subroutine init_s_loc
-
-  subroutine init_stiffness(Av,Ap,m_inv_loc,s_loc,nb_elem,DoF,boundaries,bernstein,problem)
-    type(sparse_matrix)    ,intent(out) :: Av
-    type(sparse_matrix)    ,intent(out) :: Ap
-    real,dimension(DoF,DoF),intent(in)  :: m_inv_loc
-    real,dimension(DoF,DoF),intent(in)  :: s_loc
-    integer                ,intent(in)  :: nb_elem
-    integer                ,intent(in)  :: DoF
-    character(len=*)       ,intent(in)  :: boundaries
-    logical                ,intent(in)  :: bernstein
-
-    type(acoustic_problem),intent(in)   :: problem
-
-    
-
-    real,dimension(nb_elem*DoF,nb_elem*DoF) :: Av_full,Ap_full,MINV,s_glob,A
-    real,dimension(nb_elem*DoF)             :: test
-    real,dimension(nb_elem*DoF,nb_elem*DoF) :: test_2
-    real                                    :: ddx,x
-    integer                                 :: i,j
-
-    s_glob=0.0
-
-    ddx=problem%dx/(problem%DoF-1)
-
-    
-    test=problem%U
-
-    call print_vect(test,nb_elem,DoF,problem%dx,bernstein,0,'TEST')
-
-
-    do i=1,nb_elem
-       s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
-    end do
-
-    test=matmul(s_glob,test)
-    call print_vect(test,nb_elem,DoF,problem%dx,.true.,1,'TEST')
-    
-
-    if (boundaries.eq.'periodique') then
-
-       A=0.0
-       
-       A(1,1)=0.5
-       A(1,DoF*nb_elem)=-0.5
-
-       A(DoF,DoF)=-0.5
-       A(DoF,DoF+1)=0.5
-
-       do i=2,nb_elem-1
-          A(Dof*(i-1)+1,Dof*(i-1)+1)=0.5
-          A(Dof*(i-1)+1,Dof*(i-1))=-0.5
-
-          A(Dof*i,Dof*i)=-0.5
-          A(Dof*i,Dof*i+1)=0.5
-       end do
-       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5
-       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5
-
-       A(Dof*nb_elem,Dof*nb_elem)=-0.5
-       A(Dof*nb_elem,1)=0.5
-
-       ! A(1,1)=-0.5
-       ! A(1,DoF*nb_elem)=0.5
-
-       ! A(DoF,DoF)=0.5
-       ! A(DoF,DoF+1)=-0.5
-
-       ! do i=2,nb_elem-1
-       !    A(Dof*(i-1)+1,Dof*(i-1)+1)=-0.5
-       !    A(Dof*(i-1)+1,Dof*(i-1))=0.5
-
-       !    A(Dof*i,Dof*i)=0.5
-       !    A(Dof*i,Dof*i+1)=-0.5
-       ! end do
-       ! A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=-0.5
-       ! A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=0.5
-
-       ! A(Dof*nb_elem,Dof*nb_elem)=0.5
-       ! A(Dof*nb_elem,1)=-0.5
-
-    else
-       print*,'Aucune autre condition n a été implementée'
-    end if
-
-    if (bernstein) then
-
-       
-       MINV=0.0
-
-       do i=1,nb_elem
-          MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=(1.0/problem%dx)*m_inv_loc
-       end do
-       
-       s_glob=(1.0/problem%dx)*s_glob+matmul(MINV,A)
-
-      !s_glob=transpose(-s_glob)
-       
-       call Full2Sparse(s_glob,Av)
-       Ap=Av
-
-    else
-
-
-       test_2=s_glob+transpose(s_glob)
-       s_glob=s_glob+A
-       !s_glob=transpose(s_glob)
-       s_glob=-s_glob
-       
-
-       MINV=0.0
-
-       do i=1,nb_elem
-          MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
-       end do
-
-       do i=1,nb_elem*DoF
-          do j=1,nb_elem*DoF
-             write(22,*) i,j,test_2(i,j)
-          end do
-       end do
-       Av_full=matmul(MINV,s_glob)
-
-       call Full2Sparse(Av_full,Av)
-       Ap=Av
-
-
-    end if
-    
-    print*,'Nombre de termes non nuls de Ap,Av :',Ap%NNN
-    print*,'Taille des matrices Ap,AV :',Ap%nb_ligne,'x',Ap%nb_ligne,'=',Ap%nb_ligne**2
-    print*,'Ratio :',real(Ap%NNN)/Ap%nb_ligne**2
-
-  end subroutine init_stiffness
-
-
-  
-  !******************* INIT PROBLEM **************************************
+    !******************* INIT PROBLEM **************************************
   
   function signal_ini(x,dt,a)
     real,intent(in) :: x
@@ -332,7 +128,7 @@ end function signal_ini
 
 
   subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,          &
-                          bernstein,signal)
+                          bernstein,signal,boundaries)
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
@@ -340,6 +136,7 @@ end function signal_ini
     real                  ,intent(in)  :: final_time
     logical               ,intent(in)  :: bernstein
     character(len=*)      ,intent(in)  :: signal
+    character(len=*)      ,intent(in)  :: boundaries
     
     integer :: i,j
     real    :: x,ddx
@@ -349,6 +146,7 @@ end function signal_ini
     problem%total_length=total_length
     problem%dx=total_length/(nb_elem)
     problem%bernstein=bernstein
+    problem%boundaries=boundaries
 
     problem%dt=2.05*(0.0682*problem%dx)/10.0
 
@@ -376,6 +174,171 @@ end function signal_ini
     
   end subroutine init_problem
   
+
+  !**************** RESOLUTION DU PROBLEM *************************************
+
+  subroutine init_m_loc(m_loc,m_inv_loc,bernstein)
+    real,dimension(:,:),intent(out) :: m_loc
+    real,dimension(:,:),intent(out) :: m_inv_loc
+    logical            ,intent(in)  :: bernstein
+    integer                         :: DoF
+    integer :: i,j
+
+
+    DoF=size(m_loc,1)
+    
+    if (bernstein) then
+       do i=1,DoF
+          m_loc(i,i)=Int_bxb(base_b(i),base_b(i))
+          do j=i+1,DoF
+             m_loc(i,j)=Int_bxb(base_b(i),base_b(j))
+             m_loc(j,i)=m_loc(i,j)
+          end do
+       end do
+    else
+       do i=1,DoF
+          m_loc(i,i)=Int_lxl(base_l(i),base_l(i))
+          do j=i+1,DoF
+             m_loc(i,j)=Int_lxl(base_l(i),base_l(j))
+             m_loc(j,i)=m_loc(i,j)
+          end do
+       end do
+    end if
+    
+    m_inv_loc=LU_inv(m_loc)
+
+  end subroutine init_m_loc
+  
+  subroutine init_s_loc(s_loc,bernstein)
+    real,dimension(:,:),intent(out) :: s_loc
+    logical            ,intent(in)  :: bernstein
+    integer                         :: DoF
+    integer :: i,j
+    type(t_polynom_b) :: bpol,dbpol
+    type(t_polynom_l) :: dlpol
+
+    DoF=size(s_loc,1)
+
+    if (bernstein) then
+       s_loc=D1-D0
+    else
+       do i=1,DoF
+          do j=1,DoF
+             call Lagrange2Bernstein(base_l(j),bpol)
+             call deriv_pol_b(bpol,dbpol)
+             call Bernstein2Lagrange(dbpol,dlpol)
+
+             s_loc(i,j)=Int_lxl(base_l(i),dlpol)
+
+          end do
+       end do
+    end if
+  end subroutine init_s_loc
+
+
+  subroutine init_ApAv(problem)
+    type(acoustic_problem),intent(inout) :: problem
+
+    real,dimension(problem%nb_elem*problem%DoF,                                 &
+                   problem%nb_elem*problem%DoF) :: s_glob,MINV,A
+    real,dimension(problem%DoF,problem%DoF)     :: m_loc
+    real,dimension(problem%DoF,problem%DoF)     :: m_inv_loc
+    real,dimension(problem%DoF,problem%DoF)     :: s_loc
+    
+    integer                 :: i,j
+    integer                 :: DoF,nb_elem
+
+    DoF=problem%DoF           ! For sake of lisibility
+    nb_elem=problem%nb_elem
+
+     if (problem%boundaries.eq.'periodique') then
+
+       A=0.0
+       
+       A(1,1)=0.5
+       A(1,DoF*nb_elem)=-0.5
+
+       A(DoF,DoF)=-0.5
+       A(DoF,DoF+1)=0.5
+
+       do i=2,nb_elem-1
+          A(Dof*(i-1)+1,Dof*(i-1)+1)=0.5
+          A(Dof*(i-1)+1,Dof*(i-1))=-0.5
+
+          A(Dof*i,Dof*i)=-0.5
+          A(Dof*i,Dof*i+1)=0.5
+       end do
+       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5
+       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5
+
+       A(Dof*nb_elem,Dof*nb_elem)=-0.5
+       A(Dof*nb_elem,1)=0.5
+
+    else
+       print*,'Error : cette condition au limite n est pas définie'
+       STOP
+    end if
+
+    call init_quadrature
+    call init_m_loc(m_loc,m_inv_loc,problem%bernstein)
+    call init_s_loc(s_loc,problem%bernstein)
+
+    MINV=0.0
+    s_glob=0.0
+
+    do i=1,nb_elem
+       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
+    end do
+    
+    do i=1,nb_elem
+       s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
+    end do
+
+    if (problem%bernstein) then
+       
+       s_glob=(s_glob+matmul(MINV,A))
+       !s_glob=-transpose(s_glob)         ! Commenté = Formulation Forte
+      
+       
+       call Full2Sparse(s_glob,problem%Av)
+       problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+       problem%Ap=problem%Av
+
+    else
+       s_glob=s_glob+A
+       s_glob=-transpose(s_glob)          ! Commenté = Formulation Forte
+
+       s_glob=matmul(MINV,s_glob)
+
+       call Full2Sparse(s_glob,problem%Av)
+       problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+       problem%Ap=problem%Av
+
+    end if
+    
+    print*,'Nombre de termes non nuls de Ap,Av :',problem%Ap%NNN
+    print*,'Taille des matrices Ap,AV :',problem%Ap%nb_ligne,'x', &
+         problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
+    print*,'Ratio :',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+
+  end subroutine init_ApAv
+  
+
+
+  subroutine one_time_step(problem)
+    type(acoustic_problem),intent(inout) :: problem
+
+
+       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)
+       problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)
+    
+  end subroutine one_time_step
+
+
+
+
+ !***************** SORTIE DE RESULTAT *********************************
+  
   subroutine print_vect(vector,nb_elem,DoF,dx,bernstein,N,name)
     real,dimension(nb_elem*DoF),intent(in) :: vector
 
@@ -384,7 +347,7 @@ end function signal_ini
     real                       ,intent(in) :: dx
     logical                    ,intent(in) :: bernstein
     integer                    ,intent(in) :: N
-    character(len=*)          ,intent(in) :: name
+    character(len=*)           ,intent(in) :: name
     
     integer :: i,j
     character(len=20)           :: F_NAME
@@ -429,26 +392,6 @@ end function signal_ini
                     problem%bernstein,N,'P')
 
   end subroutine print_sol
-
-
-
-  subroutine one_time_step(problem)
-    type(acoustic_problem),intent(inout) :: problem
-
-
-    if (problem%bernstein) then
-       problem%U=problem%U-problem%dt*sparse_matmul(Av,problem%P)
-       problem%P=problem%P-problem%dt*sparse_matmul(Ap,problem%U)
-       
-       ! problem%U=sparse_matmul(Av,problem%U)
-       ! problem%P=sparse_matmul(Ap,problem%P)
-    else
-       problem%U=problem%U+problem%dt/problem%dx*(sparse_matmul(Av,problem%P))
-       problem%P=problem%P+problem%dt/problem%dx*(sparse_matmul(Ap,problem%U))
-    end if
-
-    
-  end subroutine one_time_step
 
   
 end module m_acoustic
