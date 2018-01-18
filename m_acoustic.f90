@@ -177,8 +177,11 @@ contains
 
     type(acoustic_problem),intent(in)   :: problem
 
+    
+
     real,dimension(nb_elem*DoF,nb_elem*DoF) :: Av_full,Ap_full,MINV,s_glob,A
     real,dimension(nb_elem*DoF)             :: test
+    real,dimension(nb_elem*DoF,nb_elem*DoF) :: test_2
     real                                    :: ddx,x
     integer                                 :: i,j
 
@@ -223,23 +226,53 @@ contains
        A(Dof*nb_elem,Dof*nb_elem)=-0.5
        A(Dof*nb_elem,1)=0.5
 
+       ! A(1,1)=-0.5
+       ! A(1,DoF*nb_elem)=0.5
+
+       ! A(DoF,DoF)=0.5
+       ! A(DoF,DoF+1)=-0.5
+
+       ! do i=2,nb_elem-1
+       !    A(Dof*(i-1)+1,Dof*(i-1)+1)=-0.5
+       !    A(Dof*(i-1)+1,Dof*(i-1))=0.5
+
+       !    A(Dof*i,Dof*i)=0.5
+       !    A(Dof*i,Dof*i+1)=-0.5
+       ! end do
+       ! A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=-0.5
+       ! A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=0.5
+
+       ! A(Dof*nb_elem,Dof*nb_elem)=0.5
+       ! A(Dof*nb_elem,1)=-0.5
+
     else
        print*,'Aucune autre condition n a été implementée'
     end if
 
     if (bernstein) then
 
-
        
+       MINV=0.0
 
+       do i=1,nb_elem
+          MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=(1.0/problem%dx)*m_inv_loc
+       end do
+       
+       s_glob=(1.0/problem%dx)*s_glob+matmul(MINV,A)
+
+      !s_glob=transpose(-s_glob)
        
        call Full2Sparse(s_glob,Av)
        Ap=Av
 
     else
 
+
+       test_2=s_glob+transpose(s_glob)
        s_glob=s_glob+A
-       s_glob=transpose(s_glob)
+       !s_glob=transpose(s_glob)
+       s_glob=-s_glob
+       
 
        MINV=0.0
 
@@ -247,6 +280,11 @@ contains
           MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
        end do
 
+       do i=1,nb_elem*DoF
+          do j=1,nb_elem*DoF
+             write(22,*) i,j,test_2(i,j)
+          end do
+       end do
        Av_full=matmul(MINV,s_glob)
 
        call Full2Sparse(Av_full,Av)
@@ -254,34 +292,43 @@ contains
 
 
     end if
-
-
     
-    ! call Full2Sparse(s_glob,s_glob_sparse)
+    print*,'Nombre de termes non nuls de Ap,Av :',Ap%NNN
+    print*,'Taille des matrices Ap,AV :',Ap%nb_ligne,'x',Ap%nb_ligne,'=',Ap%nb_ligne**2
+    print*,'Ratio :',real(Ap%NNN)/Ap%nb_ligne**2
 
   end subroutine init_stiffness
 
 
   
   !******************* INIT PROBLEM **************************************
-
+  
   function signal_ini(x,dt,a)
     real,intent(in) :: x
     real,intent(in) :: dt
     character(len=*),intent(in) :: a
     real                        :: signal_ini
-    
+
     real                        :: xt
-    
+
     xt=x+dt
     
     if (a.eq.'sinus') then
        signal_ini=sin(4*PI*xt)
-      ! signal_ini=sin(xt)
+       ! signal_ini=sin(xt)
+    else if (a.eq.'creneau') then
+       if ((x.lt.0.55).and.(x.gt.0.45)) then
+          signal_ini=0.5
+       else
+          signal_ini=0.0
+       end if
+    else if (a.eq.'x') then
+       signal_ini=xt**5
     else
        signal_ini=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
     end if
-  end function signal_ini
+    
+end function signal_ini
 
 
   subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,          &
@@ -303,7 +350,7 @@ contains
     problem%dx=total_length/(nb_elem)
     problem%bernstein=bernstein
 
-    problem%dt=2.05*(0.0682*problem%dx)/5
+    problem%dt=2.05*(0.0682*problem%dx)/10.0
 
     allocate(problem%U(DoF*nb_elem),problem%P(DoF*nb_elem))
     problem%U=0.0
@@ -326,8 +373,6 @@ contains
           problem%P(Dof*(i-1)+1:Dof*i)=matmul(L2B,problem%P(Dof*(i-1)+1:Dof*i))
        end do
     end if
-
-    
     
   end subroutine init_problem
   
@@ -392,13 +437,11 @@ contains
 
 
     if (problem%bernstein) then
-       print*,'Je suis bien passe par là'
-
-       problem%U=(1.0/problem%dx)*sparse_matmul(Av,problem%U)
-       problem%P=(1.0/problem%dx)*sparse_matmul(Ap,problem%P)
+       problem%U=problem%U-problem%dt*sparse_matmul(Av,problem%P)
+       problem%P=problem%P-problem%dt*sparse_matmul(Ap,problem%U)
        
-       ! problem%U=(1.0/problem%dx)*sparse_matmul(Av,problem%U)
-       ! problem%P=(1.0/problem%dx)*sparse_matmul(Ap,problem%P)
+       ! problem%U=sparse_matmul(Av,problem%U)
+       ! problem%P=sparse_matmul(Ap,problem%P)
     else
        problem%U=problem%U+problem%dt/problem%dx*(sparse_matmul(Av,problem%P))
        problem%P=problem%P+problem%dt/problem%dx*(sparse_matmul(Ap,problem%U))

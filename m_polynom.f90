@@ -69,7 +69,7 @@ contains
     real,   intent(in) :: x
     real               :: b_basis
 
-    b_basis=C(i+j,i)*x**j*(1.0-x)**i
+    b_basis=C(i+j,i)*x**i*(1.0-x)**j
 
     if ((x.gt.0.0).and.(b_basis.gt.1.0)) then
        print*,'error',b_basis,i,j,x,(1.0-x),C(i+j,i),x**j,(1.0-x)**i
@@ -239,7 +239,6 @@ end subroutine Lagrange2Bernstein
 subroutine create_derive(ordre)
   integer,intent(in) :: ordre
   integer :: i
-  real,dimension(ordre+1,ordre+1) :: test
 
   allocate(D0(ordre+1,ordre+1))
   allocate(D1(ordre+1,ordre+1))  
@@ -248,21 +247,15 @@ subroutine create_derive(ordre)
   D1=0.0
   
   do i=2,ordre+1
-     D0(i,i)=real(i-1)
-     D0(i-1,i)=real(ordre+2-i)
+     D0(i,i)=-real(i-1)
+     D0(i-1,i)=-real(ordre+2-i)
   end do
 
   do i=1,ordre
-     D1(i,i)=real(ordre+1-i)
-     D1(i+1,i)=real(i)
+     D1(i,i)=-real(ordre+1-i)
+     D1(i+1,i)=-real(i)
   end do
 
-  test=D1-D0
-
-  ! print*,'test'
-  ! do i=1,ordre+1
-  !    print*,test(i,:)
-  ! end do
 
   call Full2Sparse(D0,D0_sparse)
   call Full2Sparse(D1,D1_sparse)
