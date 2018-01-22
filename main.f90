@@ -10,15 +10,15 @@ program main
   type(t_polynom_b) :: dbpol
   type(t_polynom_l) :: lpol
 
-  real,parameter      :: h=1.0/10000.0
-
   integer         ,parameter :: nb_elem=100
   integer         ,parameter :: ordre=3,DoF=ordre+1
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=1.0
+  real            ,parameter :: alpha=1.0
   character(len=*),parameter :: signal='plop'
   character(len=*),parameter :: boundaries='periodique'
   logical         ,parameter :: bernstein=.true.
+  logical         ,parameter :: F_forte=.false.
   type(acoustic_problem)     :: problem
 
   integer                    :: n_time_step
@@ -47,7 +47,8 @@ program main
   !*************************************************************************
   !********************* SIMULATION EQUATION ACOUSTIQUE*********************
 
-  call init_problem(problem,nb_elem,DoF,total_length,final_time,bernstein,signal,boundaries)
+  call init_problem(problem,nb_elem,DoF,total_length,final_time,alpha,bernstein,&
+                    F_forte,signal,boundaries)
   call print_sol(problem,0)
   
   call init_ApAv(problem)

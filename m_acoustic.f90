@@ -8,10 +8,12 @@ module m_acoustic
      integer                       :: DoF
      integer                       :: nb_elem
      logical                       :: bernstein
+     logical                       :: F_forte
      real                          :: dx
      real                          :: dt
      real                          :: total_length
      real                          :: final_time
+     real                          :: alpha
      real,dimension(:),allocatable :: U
      real,dimension(:),allocatable :: P
      character(len=20)             :: boundaries
@@ -127,14 +129,16 @@ contains
 end function signal_ini
 
 
-  subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,          &
-                          bernstein,signal,boundaries)
+  subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,alpha,    &
+                          bernstein,F_forte,signal,boundaries)
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
     real                  ,intent(in)  :: total_length
     real                  ,intent(in)  :: final_time
+    real                  ,intent(in)  :: alpha
     logical               ,intent(in)  :: bernstein
+    logical               ,intent(in)  :: F_forte
     character(len=*)      ,intent(in)  :: signal
     character(len=*)      ,intent(in)  :: boundaries
     
@@ -145,7 +149,9 @@ end function signal_ini
     problem%nb_elem=nb_elem
     problem%total_length=total_length
     problem%dx=total_length/(nb_elem)
+    problem%alpha=alpha
     problem%bernstein=bernstein
+    problem%F_forte=F_forte
     problem%boundaries=boundaries
 
     problem%dt=2.05*(0.0682*problem%dx)/10.0
@@ -171,6 +177,27 @@ end function signal_ini
           problem%P(Dof*(i-1)+1:Dof*i)=matmul(L2B,problem%P(Dof*(i-1)+1:Dof*i))
        end do
     end if
+
+    print*,'nb_elem              ::',nb_elem
+    print*,'DoF                  ::',DoF
+    print*,'total_length         ::',total_length
+    print*,'final_time           ::',final_time
+    print*,'dx                   ::',problem%dx
+    print*,'dt                   ::',problem%dt
+    print*,'Conditions aux bords ::','   ',boundaries
+    print*,'Pénalisation alpha   ::',alpha
+    print*,' '
+    if (bernstein) then
+       print*,'Le problème est résolu avec des éléments de Bernstein'
+    else
+       print*,'Le problème est résolu avec des éléments de Lagrange'
+    end if
+    if (F_forte) then
+       print*,'Le problème est résolu en formulation forte'
+    else
+       print*,'Le problème est résolu en formulation faible'
+    end if
+    print*,'------------------------------------------------------------'
     
   end subroutine init_problem
   
@@ -240,10 +267,11 @@ end function signal_ini
     type(acoustic_problem),intent(inout) :: problem
 
     real,dimension(problem%nb_elem*problem%DoF,                                 &
-                   problem%nb_elem*problem%DoF) :: s_glob,MINV,A
+                   problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,Av_full,Ap_full
     real,dimension(problem%DoF,problem%DoF)     :: m_loc
     real,dimension(problem%DoF,problem%DoF)     :: m_inv_loc
     real,dimension(problem%DoF,problem%DoF)     :: s_loc
+    real                                        :: alpha
     
     integer                 :: i,j
     integer                 :: DoF,nb_elem
@@ -251,28 +279,56 @@ end function signal_ini
     DoF=problem%DoF           ! For sake of lisibility
     nb_elem=problem%nb_elem
 
-     if (problem%boundaries.eq.'periodique') then
+    Ap_full=0.0
+    Av_full=0.0
+    
+    if (problem%boundaries.eq.'periodique') then
 
-       A=0.0
-       
-       A(1,1)=0.5
-       A(1,DoF*nb_elem)=-0.5
+       alpha=problem%alpha
 
-       A(DoF,DoF)=-0.5
-       A(DoF,DoF+1)=0.5
+       F1=0.0
+
+       F1(1,1)=0.5+alpha
+       F1(1,DoF*nb_elem)=-0.5-alpha
+
+       F1(DoF,DoF)=-0.5+alpha
+       F1(DoF,DoF+1)=0.5-alpha
 
        do i=2,nb_elem-1
-          A(Dof*(i-1)+1,Dof*(i-1)+1)=0.5
-          A(Dof*(i-1)+1,Dof*(i-1))=-0.5
+          F1(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
+          F1(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
 
-          A(Dof*i,Dof*i)=-0.5
-          A(Dof*i,Dof*i+1)=0.5
+          F1(Dof*i,Dof*i)=-0.5+alpha
+          F1(Dof*i,Dof*i+1)=0.5-alpha
        end do
-       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5
-       A(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5
+       F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
+       F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
 
-       A(Dof*nb_elem,Dof*nb_elem)=-0.5
-       A(Dof*nb_elem,1)=0.5
+       F1(Dof*nb_elem,Dof*nb_elem)=-0.5+alpha
+       F1(Dof*nb_elem,1)=0.5-alpha
+
+       alpha=-problem%alpha
+
+       F2=0.0
+
+       F2(1,1)=0.5+alpha
+       F2(1,DoF*nb_elem)=-0.5-alpha
+
+       F2(DoF,DoF)=-0.5+alpha
+       F2(DoF,DoF+1)=0.5-alpha
+
+       do i=2,nb_elem-1
+          F2(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
+          F2(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
+
+          F2(Dof*i,Dof*i)=-0.5+alpha
+          F2(Dof*i,Dof*i+1)=0.5-alpha
+       end do
+       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
+       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
+
+       F2(Dof*nb_elem,Dof*nb_elem)=-0.5+alpha
+       F2(Dof*nb_elem,1)=0.5-alpha
 
     else
        print*,'Error : cette condition au limite n est pas définie'
@@ -296,28 +352,39 @@ end function signal_ini
 
     if (problem%bernstein) then
        
-       s_glob=(s_glob+matmul(MINV,A))
-       !s_glob=-transpose(s_glob)         ! Commenté = Formulation Forte
-      
-       
-       call Full2Sparse(s_glob,problem%Av)
-       problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
-       problem%Ap=problem%Av
+       Ap_full=(s_glob+matmul(MINV,F1))
+       Av_full=(s_glob+matmul(MINV,F2))
 
+       if (.not.problem%F_forte) then
+          Ap_full=-transpose(Ap_full)
+          Av_full=-transpose(Av_full)
+       end if
+
+       call Full2Sparse(Ap_full,problem%Ap)
+       call Full2Sparse(Av_full,problem%Av)
+       problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
+       problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
     else
-       s_glob=s_glob+A
-       s_glob=-transpose(s_glob)          ! Commenté = Formulation Forte
+       Ap_full=s_glob+F1
+       Av_full=s_glob+F2
+       
+       if (.not.problem%F_forte) then
+          Ap_full=-transpose(Ap_full)
+          Av_full=-transpose(Av_full)
+       end if
 
-       s_glob=matmul(MINV,s_glob)
+       Ap_full=matmul(MINV,Ap_full)
+       Av_full=matmul(MINV,Av_full)
 
-       call Full2Sparse(s_glob,problem%Av)
+       call Full2Sparse(Ap_full,problem%Ap)
+       call Full2Sparse(Av_full,problem%Av)
+       problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
-       problem%Ap=problem%Av
-
+       
     end if
     
-    print*,'Nombre de termes non nuls de Ap,Av :',problem%Ap%NNN
-    print*,'Taille des matrices Ap,AV :',problem%Ap%nb_ligne,'x', &
+    print*,'Nombre de termes non nuls de Ap,Av ::',problem%Ap%NNN
+    print*,'Taille des matrices Ap,AV          ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio :',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
 
