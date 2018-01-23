@@ -13,16 +13,16 @@ program main
   integer         ,parameter :: nb_elem=100
   integer         ,parameter :: ordre=3,DoF=ordre+1
   real            ,parameter :: total_length=1.0
-  real            ,parameter :: final_time=1.0
+  real            ,parameter :: final_time=2.0
   real            ,parameter :: alpha=1.0
   character(len=*),parameter :: signal='plop'
-  character(len=*),parameter :: boundaries='periodique'
+  character(len=*),parameter :: boundaries='neumann'
   logical         ,parameter :: bernstein=.true.
-  logical         ,parameter :: F_forte=.false.
+  logical         ,parameter :: F_forte=.true.
   type(acoustic_problem)     :: problem
 
   integer                    :: n_time_step
-  integer         ,parameter :: n_display=50
+  integer         ,parameter :: n_display=100
 
   real,dimension(DoF) :: coef_test_b,coef_test_l
   real,dimension(DoF*nb_elem) :: work
