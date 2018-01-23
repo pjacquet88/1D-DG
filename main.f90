@@ -14,7 +14,7 @@ program main
   integer         ,parameter :: ordre=3,DoF=ordre+1
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=2.0
-  real            ,parameter :: alpha=1.0
+  real            ,parameter :: alpha=0.0
   character(len=*),parameter :: signal='plop'
   character(len=*),parameter :: boundaries='neumann'
   logical         ,parameter :: bernstein=.true.

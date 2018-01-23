@@ -281,17 +281,12 @@ end function signal_ini
 
     Ap_full=0.0
     Av_full=0.0
-    if (problem%boundaries.eq.'periodique') then
+    F1=0.0
+    F2=0.0
 
-
-       alpha=problem%alpha
-
-       F1=0.0
-
-       F1(1,1)=0.5+alpha
-       F1(1,DoF*nb_elem)=-0.5-alpha
-
-       F1(DoF,DoF)=-0.5+alpha
+    alpha=problem%alpha
+    
+      F1(DoF,DoF)=-0.5+alpha
        F1(DoF,DoF+1)=0.5-alpha
 
        do i=2,nb_elem-1
@@ -303,82 +298,79 @@ end function signal_ini
        end do
        F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
        F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
+
+       alpha=-problem%alpha
+
+       
+       F2(DoF,DoF)=-0.5+alpha
+       F2(DoF,DoF+1)=0.5-alpha
+
+       do i=2,nb_elem-1
+          F2(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
+          F2(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
+
+          F2(Dof*i,Dof*i)=-0.5+alpha
+          F2(Dof*i,Dof*i+1)=0.5-alpha
+       end do
+       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
+       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
+    
+
+       
+    if (problem%boundaries.eq.'periodique') then
+
+
+       alpha=problem%alpha
+
+       F1(1,1)=0.5+alpha
+       F1(1,DoF*nb_elem)=-0.5-alpha
 
        F1(Dof*nb_elem,Dof*nb_elem)=-0.5+alpha
        F1(Dof*nb_elem,1)=0.5-alpha
 
        alpha=-problem%alpha
 
-       F2=0.0
-
        F2(1,1)=0.5+alpha
        F2(1,DoF*nb_elem)=-0.5-alpha
-
-       F2(DoF,DoF)=-0.5+alpha
-       F2(DoF,DoF+1)=0.5-alpha
-
-       do i=2,nb_elem-1
-          F2(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
-          F2(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
-
-          F2(Dof*i,Dof*i)=-0.5+alpha
-          F2(Dof*i,Dof*i+1)=0.5-alpha
-       end do
-       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
-       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
 
        F2(Dof*nb_elem,Dof*nb_elem)=-0.5+alpha
        F2(Dof*nb_elem,1)=0.5-alpha
 
-    else
-       print*,'ELSE',problem%boundaries
-
-       
+    elseif (problem%boundaries.eq.'dirichlet') then
+      
        alpha=problem%alpha
-
-       F1=0.0
 
        F1(1,1)=1.0!+2.0*alpha
        F1(1,DoF*nb_elem)=0.0
-
-       F1(DoF,DoF)=-0.5+alpha
-       F1(DoF,DoF+1)=0.5-alpha
-
-       do i=2,nb_elem-1
-          F1(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
-          F1(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
-
-          F1(Dof*i,Dof*i)=-0.5+alpha
-          F1(Dof*i,Dof*i+1)=0.5-alpha
-       end do
-       F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
-       F1(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
 
        F1(Dof*nb_elem,Dof*nb_elem)=-1.0!+2.0*alpha
        F1(Dof*nb_elem,1)=0.0
 
        alpha=-problem%alpha
 
-       F2=0.0
-
        F2(1,1)=0.0
        F2(1,DoF*nb_elem)=0.0
 
-       F2(DoF,DoF)=-0.5+alpha
-       F2(DoF,DoF+1)=0.5-alpha
-
-       do i=2,nb_elem-1
-          F2(Dof*(i-1)+1,Dof*(i-1)+1)=0.5+alpha
-          F2(Dof*(i-1)+1,Dof*(i-1))=-0.5-alpha
-
-          F2(Dof*i,Dof*i)=-0.5+alpha
-          F2(Dof*i,Dof*i+1)=0.5-alpha
-       end do
-       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha
-       F2(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha
-
        F2(Dof*nb_elem,Dof*nb_elem)=0.0
        F2(Dof*nb_elem,1)=0.0
+    elseif (problem%boundaries.eq.'neumann') then
+       print*,'JE SUIS PASSE PAR LA'
+     alpha=problem%alpha
+
+       F1(1,1)=0.0
+       F1(1,DoF*nb_elem)=0.0
+
+       F1(Dof*nb_elem,Dof*nb_elem)=0.0
+       F1(Dof*nb_elem,1)=0.0
+
+       alpha=-problem%alpha
+
+       F2(1,1)=1.0!+2.0*alpha
+       F2(1,DoF*nb_elem)=0.0
+
+       F2(Dof*nb_elem,Dof*nb_elem)=-1.0!-2.0*alpha
+       F2(Dof*nb_elem,1)=0.0
+       
     end if
 
     call init_quadrature
@@ -398,14 +390,9 @@ end function signal_ini
 
     if (problem%bernstein) then
 
-       if (problem%boundaries.eq.'neumann') then
-          print*,'JE SUIS PASSE PAR LA'
-          Ap_full=(s_glob+matmul(MINV,F2))
-          Av_full=(s_glob+matmul(MINV,F1))
-       else
        Ap_full=(s_glob+matmul(MINV,F1))
        Av_full=(s_glob+matmul(MINV,F2))
-    end if
+
     
        if (.not.problem%F_forte) then
           Ap_full=-transpose(Ap_full)
@@ -418,15 +405,9 @@ end function signal_ini
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
     else
 
-       if (problem%boundaries.eq.'neumann') then
-          print*,'JE SUIS PASSE PAR LA'
-          Ap_full=s_glob+F2
-          Av_full=s_glob+F1
-       else
           Ap_full=s_glob+F1
           Av_full=s_glob+F2   
-       end if
-       
+
        if (.not.problem%F_forte) then
           Ap_full=-transpose(Ap_full)
           Av_full=-transpose(Av_full)
