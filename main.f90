@@ -14,13 +14,14 @@ program main
   integer         ,parameter :: ordre=3,DoF=ordre+1
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=2.0
-  real            ,parameter :: alpha=0.0
-  character(len=*),parameter :: signal='plop'
-  character(len=*),parameter :: boundaries='neumann'
-  logical         ,parameter :: bernstein=.true.
+  real            ,parameter :: alpha=2.0
+  character(len=*),parameter :: signal='creneau'
+  character(len=*),parameter :: boundaries='dirichlet'
+  logical         ,parameter :: bernstein=.false.
   logical         ,parameter :: F_forte=.true.
   type(acoustic_problem)     :: problem
 
+  real                       :: t
   integer                    :: n_time_step
   integer         ,parameter :: n_display=100
 
@@ -63,7 +64,8 @@ program main
   ! call system('eog test.png &')
   
   do i=1,n_time_step
-     call one_time_step(problem)
+     t=(i-1)*problem%dt
+     call one_time_step(problem,t)
 
      if (modulo(i,n_display).eq.0) then
         call print_sol(problem,i/n_display)

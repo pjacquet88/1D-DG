@@ -5,21 +5,22 @@ module m_acoustic
   implicit none
 
   type acoustic_problem
-     integer                       :: DoF
-     integer                       :: nb_elem
-     logical                       :: bernstein
-     logical                       :: F_forte
-     real                          :: dx
-     real                          :: dt
-     real                          :: total_length
-     real                          :: final_time
-     real                          :: alpha
-     real,dimension(:),allocatable :: U
-     real,dimension(:),allocatable :: P
-     character(len=20)             :: boundaries
-     character(len=20)             :: signal
-     type(sparse_matrix)           :: Ap
-     type(sparse_matrix)           :: Av
+     integer                         :: DoF
+     integer                         :: nb_elem
+     logical                         :: bernstein
+     logical                         :: F_forte
+     real                            :: dx
+     real                            :: dt
+     real                            :: total_length
+     real                            :: final_time
+     real                            :: alpha
+     real,dimension(:),allocatable   :: U
+     real,dimension(:),allocatable   :: P
+     character(len=20)               :: boundaries
+     character(len=20)               :: signal
+     type(sparse_matrix)             :: Ap
+     type(sparse_matrix)             :: Av
+     real,dimension(:,:),allocatable :: Minv
   end type acoustic_problem
 
   real,dimension(15)              :: xx,weight
@@ -144,6 +145,7 @@ end function signal_ini
     
     integer :: i,j
     real    :: x,ddx
+    real    :: gd,dd
 
     problem%DoF=DoF
     problem%nb_elem=nb_elem
@@ -269,7 +271,6 @@ end function signal_ini
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,Av_full,Ap_full
     real,dimension(problem%DoF,problem%DoF)     :: m_loc
-    real,dimension(problem%DoF,problem%DoF)     :: m_inv_loc
     real,dimension(problem%DoF,problem%DoF)     :: s_loc
     real                                        :: alpha
     
@@ -354,7 +355,6 @@ end function signal_ini
        F2(Dof*nb_elem,Dof*nb_elem)=0.0
        F2(Dof*nb_elem,1)=0.0
     elseif (problem%boundaries.eq.'neumann') then
-       print*,'JE SUIS PASSE PAR LA'
      alpha=problem%alpha
 
        F1(1,1)=0.0
@@ -374,14 +374,15 @@ end function signal_ini
     end if
 
     call init_quadrature
-    call init_m_loc(m_loc,m_inv_loc,problem%bernstein)
+    allocate(problem%Minv(DoF,DoF))
+    call init_m_loc(m_loc,problem%Minv,problem%bernstein)
     call init_s_loc(s_loc,problem%bernstein)
 
     MINV=0.0
     s_glob=0.0
 
     do i=1,nb_elem
-       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_inv_loc
+       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=problem%Minv
     end do
     
     do i=1,nb_elem
@@ -432,12 +433,32 @@ end function signal_ini
   
 
 
-  subroutine one_time_step(problem)
+  subroutine one_time_step(problem,t)
     type(acoustic_problem),intent(inout) :: problem
+    real,                  intent(in)    :: t
 
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSv,RHSp
+    real                                        :: gd,gg
 
-       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)
-       problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)
+    RHSp=0.0
+    RHSv=0.0
+
+    if (problem%boundaries.eq.'dirichlet') then
+       gg=min(0.5*t,0.5)
+       gd=0.0       
+       RHSp(1)=gg*(1.0+0.0*problem%alpha)*(problem%dt/problem%dx)
+       !RHSp(1)=gg*(2.0*problem%alpha)*(problem%dt/problem%dx)
+       RHSp(size(RHSp))=gg*(1.0-0.0*problem%alpha)*(problem%dt/problem%dx)
+       !RHSp(size(RHSp))=gd*(2.0*problem%alpha)
+       RHSv(1)=0.0
+       RHSv(size(RHSv))=0.0
+
+       RHSp(1:problem%DoF)=matmul(problem%Minv,RHSp(1:problem%DoF))
+       RHSp(size(RHSp)-problem%DoF+1:size(RHSp))=matmul(problem%Minv,RHSp(size(RHSp)-problem%DoF+1:size(RHSp)))
+    end if
+
+       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
+       problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
     
   end subroutine one_time_step
 
