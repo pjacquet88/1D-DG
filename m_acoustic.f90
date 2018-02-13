@@ -186,18 +186,18 @@ end function signal_ini
     print*,'final_time           ::',final_time
     print*,'dx                   ::',problem%dx
     print*,'dt                   ::',problem%dt
-    print*,'Conditions aux bords ::','   ',boundaries
-    print*,'Pénalisation alpha   ::',alpha
+    print*,'Boundary Condition   ::','   ',boundaries
+    print*,'Penalisation alpha   ::',alpha
     print*,' '
     if (bernstein) then
-       print*,'Le problème est résolu avec des éléments de Bernstein'
+       print*,'The problem is solved with Bernstein elements'
     else
-       print*,'Le problème est résolu avec des éléments de Lagrange'
+       print*,'The problem is solved with Lagrange elements'
     end if
     if (F_forte) then
-       print*,'Le problème est résolu en formulation forte'
+       print*,'The problem is solved with a strong formulation'
     else
-       print*,'Le problème est résolu en formulation faible'
+       print*,'The problem is solved with a weak formulation'
     end if
     print*,'------------------------------------------------------------'
     
@@ -269,7 +269,8 @@ end function signal_ini
     type(acoustic_problem),intent(inout) :: problem
 
     real,dimension(problem%nb_elem*problem%DoF,                                 &
-                   problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,Av_full,Ap_full
+                   problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,           &
+                                                   Av_full,Ap_full
     real,dimension(problem%DoF,problem%DoF)     :: m_loc
     real,dimension(problem%DoF,problem%DoF)     :: s_loc
     real                                        :: alpha
@@ -341,10 +342,10 @@ end function signal_ini
       
        alpha=problem%alpha
 
-       F1(1,1)=1.0!+2.0*alpha
+       F1(1,1)=1.0+2.0*alpha
        F1(1,DoF*nb_elem)=0.0
 
-       F1(Dof*nb_elem,Dof*nb_elem)=-1.0!+2.0*alpha
+       F1(Dof*nb_elem,Dof*nb_elem)=-1.0-2.0*alpha
        F1(Dof*nb_elem,1)=0.0
 
        alpha=-problem%alpha
@@ -365,10 +366,10 @@ end function signal_ini
 
        alpha=-problem%alpha
 
-       F2(1,1)=1.0!+2.0*alpha
+       F2(1,1)=1.0-2.0*alpha
        F2(1,DoF*nb_elem)=0.0
 
-       F2(Dof*nb_elem,Dof*nb_elem)=-1.0!-2.0*alpha
+       F2(Dof*nb_elem,Dof*nb_elem)=-1.0+2.0*alpha
        F2(Dof*nb_elem,1)=0.0
        
     end if
@@ -424,10 +425,10 @@ end function signal_ini
        
     end if
     
-    print*,'Nombre de termes non nuls de Ap,Av ::',problem%Ap%NNN
-    print*,'Taille des matrices Ap,AV          ::',problem%Ap%nb_ligne,'x', &
+    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
+    print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    print*,'Ratio :',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+    print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
 
   end subroutine init_ApAv
   
@@ -445,16 +446,16 @@ end function signal_ini
 
     if (problem%boundaries.eq.'dirichlet') then
        gg=min(0.5*t,0.5)
-       gd=0.0       
-       RHSp(1)=gg*(1.0+0.0*problem%alpha)*(problem%dt/problem%dx)
-       !RHSp(1)=gg*(2.0*problem%alpha)*(problem%dt/problem%dx)
-       RHSp(size(RHSp))=gg*(1.0-0.0*problem%alpha)*(problem%dt/problem%dx)
-       !RHSp(size(RHSp))=gd*(2.0*problem%alpha)
+       gd=-gg
+       RHSp(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
+       RHSp(size(RHSp))=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
+       
        RHSv(1)=0.0
        RHSv(size(RHSv))=0.0
 
        RHSp(1:problem%DoF)=matmul(problem%Minv,RHSp(1:problem%DoF))
-       RHSp(size(RHSp)-problem%DoF+1:size(RHSp))=matmul(problem%Minv,RHSp(size(RHSp)-problem%DoF+1:size(RHSp)))
+       RHSp(size(RHSp)-problem%DoF+1:size(RHSp))=matmul(problem%Minv,           &
+            RHSp(size(RHSp)-problem%DoF+1:size(RHSp)))
     end if
 
        problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
