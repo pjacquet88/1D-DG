@@ -11,18 +11,19 @@ program main
   type(t_polynom_l) :: lpol
 
   integer         ,parameter :: nb_elem=100
-  integer         ,parameter :: ordre=3,DoF=ordre+1
+  integer         ,parameter :: ordre=4,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0
-  real            ,parameter :: final_time=1.0
-  real            ,parameter :: alpha=1.0
-  character(len=*),parameter :: signal='plop'
-  character(len=*),parameter :: boundaries='periodique'
-  logical         ,parameter :: bernstein=.true.
-  logical         ,parameter :: F_forte=.false.
+  real            ,parameter :: final_time=2.0
+  real            ,parameter :: alpha=2.0            ! Penalisation value
+  character(len=*),parameter :: signal='ricker'
+  character(len=*),parameter :: boundaries='dirichlet'
+  logical         ,parameter :: bernstein=.true.    !If F-> Lagrange Elements
+  logical         ,parameter :: F_forte=.true. !Means Strong Formulation (always=T) 
   type(acoustic_problem)     :: problem
 
+  real                       :: t
   integer                    :: n_time_step
-  integer         ,parameter :: n_display=50
+  integer         ,parameter :: n_display=100
 
   real,dimension(DoF) :: coef_test_b,coef_test_l
   real,dimension(DoF*nb_elem) :: work
@@ -54,7 +55,7 @@ program main
   call init_ApAv(problem)
   
   n_time_step=int(final_time/problem%dt)
-  print*,'il y aura :',n_time_step,'time _step'
+  print*,'There will be :',n_time_step,'time_step'
 
   ! call one_time_step(problem)
   ! call print_sol(problem,1)
@@ -63,7 +64,8 @@ program main
   ! call system('eog test.png &')
   
   do i=1,n_time_step
-     call one_time_step(problem)
+     t=(i-1)*problem%dt
+     call one_time_step(problem,t)
 
      if (modulo(i,n_display).eq.0) then
         call print_sol(problem,i/n_display)
@@ -79,6 +81,5 @@ program main
   
   call system('gnuplot5 script.gnuplot')
   call system ('eog animate.gif &')
-  print*,'done'
   
 end program main
