@@ -10,8 +10,8 @@ all: run
 	$(FC) $(CFLAGS) -c $<
 #	mv $@ .obj
 
-run: m_matrix.o m_polynom.o m_acoustic.o main.o
+run:  m_matrix.o m_powermethod.o m_polynom.o m_acoustic.o main.o
 	$(FC) $(CFLAGS) $^ -o $@  $(LDFLAG)
 
 clean:
-	rm -f *.o *.mod *~ *.png fort.* *.dat fichier/* animate.gif run
+	rm -f *.o *.mod *~ *.png fort.* fichier/* animate.gif run
