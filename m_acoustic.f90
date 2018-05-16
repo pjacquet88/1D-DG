@@ -9,7 +9,6 @@ module m_acoustic
      integer                         :: nb_elem
      integer                         :: time_order
      logical                         :: bernstein
-     logical                         :: F_forte
      real                            :: dx
      real                            :: dt
      real                            :: total_length
@@ -134,8 +133,8 @@ contains
 
 
   subroutine init_problem(problem,nb_elem,DoF,time_order,total_length,          &
-                          final_time,alpha,bernstein,F_forte,signal,boundaries, &
-                          k_max,epsilon)
+                          final_time,alpha,bernstein,signal,boundaries,k_max,   &
+                          epsilon)
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
@@ -144,7 +143,6 @@ contains
     real                  ,intent(in)  :: final_time
     real                  ,intent(in)  :: alpha
     logical               ,intent(in)  :: bernstein
-    logical               ,intent(in)  :: F_forte
     character(len=*)      ,intent(in)  :: signal
     character(len=*)      ,intent(in)  :: boundaries
     integer               ,intent(in)  :: k_max
@@ -160,7 +158,6 @@ contains
     problem%dx=total_length/(nb_elem)
     problem%alpha=alpha
     problem%bernstein=bernstein
-    problem%F_forte=F_forte
     problem%boundaries=boundaries
     problem%k_max=k_max
     problem%epsilon=epsilon
@@ -185,11 +182,6 @@ contains
        print*,'The problem is solved with Bernstein elements'
     else
        print*,'The problem is solved with Lagrange elements'
-    end if
-    if (F_forte) then
-       print*,'The problem is solved with a strong formulation'
-    else
-       print*,'The problem is solved with a weak formulation'
     end if
     print*,'------------------------------------------------------------'    
   end subroutine init_problem
@@ -304,23 +296,23 @@ contains
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
     integer                         :: i
-    real,parameter                  :: alpha=1.99
+    real,parameter                  :: alpha=1.00
     real                            :: cfl
 
-    ! A=matmul(Ap,Av)
-    ! ! do i=1,size(A,1)
-    ! !    write(789,*) A(i,:)
-    ! ! end do
+    A=matmul(Ap,Av)
+    ! do i=1,size(A,1)
+    !    write(789,*) A(i,:)
+    ! end do
     
-    ! call Full2Sparse(A,sparse_A)
-    ! call power_method_sparse(sparse_A,max_value,k_max,epsilon)
-    ! dt=alpha/(sqrt(abs(max_value)))
-    ! call free_sparse_matrix(sparse_A)
-    ! A=matmul(Av,Ap)
-    ! call Full2Sparse(matmul(Av,Ap),sparse_A)
-    ! call power_method_sparse(sparse_A,max_value,k_max,epsilon)
-    ! dt=min(dt,alpha/(sqrt(abs(max_value))))
-    ! call free_sparse_matrix(sparse_A)
+    call Full2Sparse(A,sparse_A)
+    call power_method_sparse(sparse_A,max_value,k_max,epsilon)
+    dt=alpha/(sqrt(abs(max_value)))
+    call free_sparse_matrix(sparse_A)
+    A=matmul(Av,Ap)
+    call Full2Sparse(matmul(Av,Ap),sparse_A)
+    call power_method_sparse(sparse_A,max_value,k_max,epsilon)
+    dt=min(dt,alpha/(sqrt(abs(max_value))))
+    call free_sparse_matrix(sparse_A)
 
 
 
@@ -331,7 +323,7 @@ contains
     ! dt= 1.24648141E-04*alpha  !ordre  3
     ! dt= 8.29414494E-05*alpha  !ordre  4
     !  dt= 5.91463395E-05*alpha  !ordre  5
-     dt= 4.42988749E-05*alpha  !ordre  6
+    ! dt= 4.42988749E-05*alpha  !ordre  6
     ! dt= 3.44150467E-05*alpha  !ordre  7
     ! dt= 2.75054135E-05*alpha  !ordre  8
     ! dt= 2.24858413E-05*alpha  !ordre  9
@@ -351,11 +343,11 @@ contains
      !*********************************************
 
      !************** cfl constante ****************
-     cfl=0.95*dt*100 ! cfl=dt/h
-     if (time_order.eq.4) then
-        cfl=cfl*2.7
-     end if
-     dt=cfl/(nb_elem)
+     ! cfl=0.95*dt*100 ! cfl=dt/h
+     ! if (time_order.eq.4) then
+     !    cfl=cfl*2.7
+     ! end if
+     ! dt=cfl/(nb_elem)
   end subroutine init_dt
   
 
@@ -478,11 +470,6 @@ contains
     if (problem%bernstein) then
        Ap_full=(s_glob+matmul(MINV,F1))
        Av_full=(s_glob+matmul(MINV,F2))
-
-       if (.not.problem%F_forte) then
-          Ap_full=-transpose(Ap_full)
-          Av_full=-transpose(Av_full)
-       end if
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
@@ -627,6 +614,12 @@ contains
     integer                                     :: i,j,k
     integer                                     :: DoF,nb_elem
 
+    if (problem%signal.ne.'periodique') then
+       print*,'The error cannot be calculated'
+       print*,'The boundary conditions are not periodic'
+       RETURN
+    end if
+
     DoF=problem%DoF
     nb_elem=problem%nb_elem
 
@@ -651,8 +644,6 @@ contains
 
     if(problem%bernstein) then
        do k=1,nb_elem
-          !U_work(DoF*(k-1)+1:DoF*k)=matmul(B2L,problem%U(DoF*(k-1)+1:DoF*k))
-          !P_work(DoF*(k-1)+1:DoF*k)=matmul(B2L,problem%P(DoF*(k-1)+1:DoF*k))
           call Bernstein2Lagrange(problem%U,U_work,nb_elem,DoF)
           call Bernstein2Lagrange(problem%P,P_work,nb_elem,DoF)
        end do
@@ -660,19 +651,12 @@ contains
        U_work=problem%U
        P_work=problem%P
     end if
+    
     do i=1,nb_elem*DoF
        errorU=errorU+(U_ex(i)-U_work(i))**2
        errorP=errorP+(P_ex(i)-P_work(i))**2
     end do
-    call print_vect(0.0*U_work,0,DoF,problem%dx,.false.,0,'Error')
-    call print_vect(0.0*U_work,1,DoF,problem%dx,.false.,1,'Error')
-    if (present(iter)) then
-       call print_vect(U_ex-U_work,nb_elem,DoF,problem%dx,.false.,iter,'Error')
-    else
-    !   call print_vect(0.0*U_work,0,DoF,problem%dx,.false.,0,'Error')
-     !  call print_vect(0.0*U_work,1,DoF,problem%dx,.false.,1,'Error')
-       call print_vect(U_ex-U_work,nb_elem,DoF,problem%dx,.false.,nb_elem,'Error')
-    end if
+   
     errorU=sqrt(errorU)/sqrt(dot_product(U_ex,U_ex))
     errorP=sqrt(errorP)/sqrt(dot_product(P_ex,P_ex))
 
@@ -683,13 +667,7 @@ contains
     print*,'Lerreur en P est de : ', errorP
     print*,'-----------------------------'    
     print*,'-----------------------------'
-    
-    if (present(iter)) then
-       call print_vect(U_ex,nb_elem,DoF,problem%dx,           &
-           .false.,iter,'Uex')
-       call print_vect(P_ex,nb_elem,DoF,problem%dx,           &
-            .false.,iter,'Pex')
-    end if
+
   end subroutine error_periodique
   
 end module m_acoustic
