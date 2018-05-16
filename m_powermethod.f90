@@ -18,9 +18,6 @@ contains
     integer                         :: k
     integer :: i
 
-    print*,'La précision demandée est de : ',epsilon
-    print*,'le nombre d itération accordé est de : ',k_max
-
     r=1.0
     k=1
 
@@ -40,15 +37,11 @@ contains
        q1=q2
        k=k+1
        
-       if (modulo(k,100).eq.0) then
-          print*,k,r,max_value,q1(1),q1(2),q1(3)
-       end if
+       ! if (modulo(k,100).eq.0) then
+       !    print*,k,r,max_value,q1(1),q1(2),q1(3)
+       ! end if
        
     end do
-
-    print*,'Le reste est de : ',r,epsilon
-    print*,'le nombre d iteration est de : ',k,k_max,(r.le.epsilon)
-    print*,'La valeur propre max est de : ',max_value,(k.ge.k_max)
   end subroutine power_method
 
    subroutine power_method_sparse(A,max_value,k_max,epsilon)
@@ -59,10 +52,6 @@ contains
     real,dimension(:),allocatable   :: z,q1,q2
     real                            :: r
     integer                         :: k
-    
-    print*,'La précision demandée est de : ',epsilon
-    print*,'le nombre d itération accordé est de : ',k_max
-
     r=1.0
     k=1
 
@@ -77,15 +66,11 @@ contains
        q1=q2
        k=k+1
 
-       if (modulo(k,100).eq.0) then
-          print*,k,r,max_value
-       end if 
+       ! if (modulo(k,100).eq.0) then
+       !    print*,k,r,max_value
+       ! end if 
        
     end do
-
-    print*,'Le reste est de : ',r,epsilon
-    print*,'le nombre d iteration est de : ',k,k_max,(r.le.epsilon)
-    print*,'La valeur propre max est de : ',max_value,(k.ge.k_max)
   end subroutine power_method_sparse
 
 

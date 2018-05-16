@@ -7,6 +7,7 @@ module m_acoustic
   type acoustic_problem
      integer                         :: DoF
      integer                         :: nb_elem
+     integer                         :: time_order
      logical                         :: bernstein
      logical                         :: F_forte
      real                            :: dx
@@ -132,11 +133,13 @@ contains
   end function solution
 
 
-  subroutine init_problem(problem,nb_elem,DoF,total_length,final_time,alpha,    &
-                          bernstein,F_forte,signal,boundaries,k_max,epsilon)
+  subroutine init_problem(problem,nb_elem,DoF,time_order,total_length,          &
+                          final_time,alpha,bernstein,F_forte,signal,boundaries, &
+                          k_max,epsilon)
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
+    integer               ,intent(in)  :: time_order
     real                  ,intent(in)  :: total_length
     real                  ,intent(in)  :: final_time
     real                  ,intent(in)  :: alpha
@@ -151,6 +154,7 @@ contains
     real    :: gd,dd
 
     problem%DoF=DoF
+    problem%time_order=time_order
     problem%nb_elem=nb_elem
     problem%total_length=total_length
     problem%dx=total_length/(nb_elem)
@@ -288,18 +292,19 @@ contains
   end subroutine init_s_loc
 
 
-  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem)
+  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_order)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
     real               ,intent(out) :: dt
     integer            ,intent(in)  :: k_max
     real               ,intent(in)  :: epsilon
     integer            ,intent(in)  :: nb_elem
+    integer            ,intent(in)  :: time_order
     type(sparse_matrix)             :: sparse_A
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
     integer                         :: i
-    real,parameter                  :: alpha=1.90
+    real,parameter                  :: alpha=1.99
     real                            :: cfl
 
     ! A=matmul(Ap,Av)
@@ -311,22 +316,22 @@ contains
     ! call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     ! dt=alpha/(sqrt(abs(max_value)))
     ! call free_sparse_matrix(sparse_A)
-    ! ! A=matmul(Av,Ap)
-    ! ! call Full2Sparse(matmul(Av,Ap),sparse_A)
-    ! ! call power_method_sparse(sparse_A,max_value,k_max,epsilon)
-    ! ! dt=min(dt,alpha/(sqrt(abs(max_value))))
-    ! ! call free_sparse_matrix(sparse_A)
+    ! A=matmul(Av,Ap)
+    ! call Full2Sparse(matmul(Av,Ap),sparse_A)
+    ! call power_method_sparse(sparse_A,max_value,k_max,epsilon)
+    ! dt=min(dt,alpha/(sqrt(abs(max_value))))
+    ! call free_sparse_matrix(sparse_A)
 
 
 
     !****** dt constant *************************
     !****** 100 ***************************
-    ! dt=4.16666589E-04*alpha  !ordre  1 
+    ! dt= 4.16666589E-04*alpha   !ordre  1 
     ! dt= 2.08152022E-04*alpha  !ordre  2
     ! dt= 1.24648141E-04*alpha  !ordre  3
-     dt= 8.29414494E-05*alpha  !ordre  4
-    ! dt= 5.91463395E-05*alpha  !ordre  5
-    ! dt= 4.42988749E-05*alpha  !ordre  6
+    ! dt= 8.29414494E-05*alpha  !ordre  4
+    !  dt= 5.91463395E-05*alpha  !ordre  5
+     dt= 4.42988749E-05*alpha  !ordre  6
     ! dt= 3.44150467E-05*alpha  !ordre  7
     ! dt= 2.75054135E-05*alpha  !ordre  8
     ! dt= 2.24858413E-05*alpha  !ordre  9
@@ -346,10 +351,11 @@ contains
      !*********************************************
 
      !************** cfl constante ****************
-     cfl=0.95/(dt*100)
-     dt=1.0/(cfl*nb_elem)
-
-    
+     cfl=0.95*dt*100 ! cfl=dt/h
+     if (time_order.eq.4) then
+        cfl=cfl*2.7
+     end if
+     dt=cfl/(nb_elem)
   end subroutine init_dt
   
 
@@ -358,7 +364,7 @@ contains
 
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,           &
-                                                   Av_full,Ap_full
+                                                   Av_full,Ap_full,B
     real,dimension(problem%DoF,problem%DoF)     :: m_loc
     real,dimension(problem%DoF,problem%DoF)     :: s_loc
     real                                        :: alpha
@@ -478,16 +484,18 @@ contains
           Av_full=-transpose(Av_full)
        end if
 
+       call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
+                     problem%k_max,problem%epsilon,problem%nb_elem,             &
+                     problem%time_order)
+       
+       if (problem%time_order.eq.4) then
+          B=matmul(Ap_full,Av_full)
+          Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
+          Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
+       end if
+          
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
-
-       print*,'---------------------------'
-       print*,'epsilon',problem%epsilon
-       print*,'k_max',problem%k_max
-       print*,'---------------------------'
-
-       call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                     problem%k_max,problem%epsilon,problem%nb_elem)
        
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
@@ -495,20 +503,22 @@ contains
           Ap_full=s_glob+F1
           Av_full=s_glob+F2   
 
-       if (.not.problem%F_forte) then
-          Ap_full=-transpose(Ap_full)
-          Av_full=-transpose(Av_full)
-       end if
-
        Ap_full=matmul(MINV,Ap_full)
        Av_full=matmul(MINV,Av_full)
 
-       call Full2Sparse(Ap_full,problem%Ap)
-       call Full2Sparse(Av_full,problem%Av)
-       
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                     problem%k_max,problem%epsilon,problem%nb_elem)
-       
+                     problem%k_max,problem%epsilon,problem%nb_elem,             &
+                     problem%time_order)
+
+       if (problem%time_order.eq.4) then
+          B=matmul(Ap_full,Av_full)
+          Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
+          Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
+       end if
+
+          call Full2Sparse(Ap_full,problem%Ap)
+          call Full2Sparse(Av_full,problem%Av)
+          
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
     end if
@@ -654,11 +664,13 @@ contains
        errorU=errorU+(U_ex(i)-U_work(i))**2
        errorP=errorP+(P_ex(i)-P_work(i))**2
     end do
+    call print_vect(0.0*U_work,0,DoF,problem%dx,.false.,0,'Error')
+    call print_vect(0.0*U_work,1,DoF,problem%dx,.false.,1,'Error')
     if (present(iter)) then
        call print_vect(U_ex-U_work,nb_elem,DoF,problem%dx,.false.,iter,'Error')
     else
-       call print_vect(0.0*U_work,0,DoF,problem%dx,.false.,0,'Error')
-       call print_vect(0.0*U_work,1,DoF,problem%dx,.false.,1,'Error')
+    !   call print_vect(0.0*U_work,0,DoF,problem%dx,.false.,0,'Error')
+     !  call print_vect(0.0*U_work,1,DoF,problem%dx,.false.,1,'Error')
        call print_vect(U_ex-U_work,nb_elem,DoF,problem%dx,.false.,nb_elem,'Error')
     end if
     errorU=sqrt(errorU)/sqrt(dot_product(U_ex,U_ex))
@@ -674,9 +686,9 @@ contains
     
     if (present(iter)) then
        call print_vect(U_ex,nb_elem,DoF,problem%dx,           &
-            .false.,iter,'Uex')
-       ! call print_vect(P_ex,nb_elem,DoF,problem%dx,           &
-       !      .false.,0,'Pex')
+           .false.,iter,'Uex')
+       call print_vect(P_ex,nb_elem,DoF,problem%dx,           &
+            .false.,iter,'Pex')
     end if
   end subroutine error_periodique
   

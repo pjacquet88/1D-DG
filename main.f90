@@ -9,11 +9,12 @@ program main
 
   !  integer         ,parameter :: nb_elem=100
   integer                    :: nb_elem
-  integer         ,parameter :: ordre=4,DoF=ordre+1  ! Polynoms order
+  integer         ,parameter :: ordre=6,DoF=ordre+1  ! Polynoms order
+  integer         ,parameter :: time_order=4 
   !integer         ,parameter :: ordre,DoF
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=1.0
-  real            ,parameter :: alpha=0.5            ! Penalisation value
+  real            ,parameter :: alpha=0.0         ! Penalisation value
   character(len=*),parameter :: signal='ricker'
   character(len=*),parameter :: boundaries='periodique'
   logical         ,parameter :: bernstein=.true.    !If F-> Lagrange Elements
@@ -29,6 +30,8 @@ program main
   real                       :: errorP
   real                       :: test
 
+  integer,dimension(11)      :: vect_nb_elem                    
+
   !********************** Animation et Sorties ******************************
   logical,parameter          :: animation=.false.
   logical,parameter          :: sortie=.false.
@@ -36,6 +39,11 @@ program main
 
   integer :: values(1:8), k
   integer,dimension(:), allocatable :: seed
+
+  vect_nb_elem(1)=50
+  do i=2,size(vect_nb_elem)
+     vect_nb_elem(i)=floor(vect_nb_elem(i-1)*1.25)
+  end do
 
   call date_and_time(values=values)
 
@@ -47,18 +55,11 @@ program main
   !*************************************************************************
   !********************* SIMULATION EQUATION ACOUSTIQUE*********************
 
-
-
   ! do ordre=1,10
   !    DoF=ordre+1
 
   call init_basis_b(ordre)
   call init_basis_l(ordre)
-
-  print*,'test'
-  do i=1,ordre+1
-     print*,base_l(i,:)
-  end do
 
   call create_B2L
   call create_L2B
@@ -66,15 +67,18 @@ program main
 
   call create_derive(ordre)
 
-  do nb_elem=10,100,1
+ do j=1,size(vect_nb_elem)
+    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%',j,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    nb_elem=vect_nb_elem(j)
+  !do nb_elem=20,500,5
 
-     call init_problem(problem,nb_elem,DoF,total_length,final_time,alpha,bernstein,&
-          F_forte,signal,boundaries,k_max,epsilon)
+     call init_problem(problem,nb_elem,DoF,time_order,total_length,final_time,  &
+                       alpha,bernstein,F_forte,signal,boundaries,k_max,epsilon)
 
      call init_ApAv(problem)
      call init_UP(problem)
      call print_sol(problem,0)
-     !call error_periodique(problem,t,errorU,errorP,0)
+     call error_periodique(problem,t,errorU,errorP,0)
      n_time_step=int(final_time/problem%dt)
      if (n_time_step.le.200) then
         n_display=1
@@ -84,26 +88,24 @@ program main
      print*,'n_display',n_display
      print*,'dt = ',problem%dt
      print*,'There will be :',n_time_step,'time_step'
-
-     call one_time_step(problem,t)
-     call print_sol(problem,1)
      
-     do i=2,n_time_step
+     do i=1,n_time_step
         t=i*problem%dt
         call one_time_step(problem,t)
 
         if (sortie) then
            if (modulo(i,n_display).eq.0) then
               call print_sol(problem,i/n_display)
-              !call error_periodique(problem,t,errorU,errorP,i/n_display)
-             ! write(88,*) t,log10(errorU)
+              call error_periodique(problem,t,errorU,errorP,i/n_display)
+              write(90,*) t,log10(errorU)
            end if
         end if
-           ! if (i.eq.n_time_step) then
-           !    call print_sol(problem,42)
-           ! end if
+        if (i.eq.n_time_step) then
+           !call print_sol(problem,42)
+           call error_periodique(problem,t,errorU,errorP,201)
+        end if
 
-        end do
+     end do
 
         if (animation.and.sortie) then
            open(unit=78,file='script.gnuplot',action='write')
@@ -123,7 +125,7 @@ program main
         write(88,*) log10(1.0/nb_elem),log10(errorU)
         write(89,*) log10(1.0/nb_elem),log10(errorP)
         ! write(77,*) ordre,problem%dt
-
+        print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%',nb_elem,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
      end do
 
 

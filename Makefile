@@ -1,6 +1,6 @@
 FC = gfortran
 
-CFLAGS = -g -O0 -fbounds-check -ffree-line-length-none -cpp -DKIND_MAT=8
+CFLAGS = -g -O0 -fbounds-check -ffree-line-length-none -cpp -DKIND_MAT=8 -fdefault-real-8 -freal-4-real-8
 
 LDFLAG = -llapack -lblas
 
