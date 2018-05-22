@@ -9,7 +9,7 @@ program main
 
   integer         ,parameter :: nb_elem=100
   integer         ,parameter :: ordre=4,DoF=ordre+1  ! Polynoms order
-  integer         ,parameter :: time_order=4 
+  integer         ,parameter :: time_order=4
   real            ,parameter :: total_length=1.0
   real            ,parameter :: final_time=1.0
   real            ,parameter :: alpha=0.5            ! Penalisation value
@@ -75,8 +75,8 @@ program main
                     total_length,final_time,alpha,bernstein,signal,boundaries,  &
                     k_max,epsilon)
   
-  call init_ApAv(problem)
-  call init_UP(problem)
+ ! call init_ApAv(problem)
+ ! call init_UP(problem)
   call print_sol(problem,0)
 
   n_time_step=int(final_time/problem%dt)
