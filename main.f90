@@ -8,17 +8,22 @@ program main
   real              :: x,ddx
 
   integer         ,parameter :: nb_elem=100
-  integer         ,parameter :: ordre=6,DoF=ordre+1  ! Polynoms order
+  integer         ,parameter :: ordre=4,DoF=ordre+1  ! Polynoms order
   integer         ,parameter :: time_order=4 
   real            ,parameter :: total_length=1.0
-  real            ,parameter :: final_time=10.0
-  real            ,parameter :: alpha=0.5        ! Penalisation value
+  real            ,parameter :: final_time=1.0
+  real            ,parameter :: alpha=0.5            ! Penalisation value
   character(len=*),parameter :: signal='ricker'
-  character(len=*),parameter :: boundaries='dirichlet'
+  character(len=*),parameter :: boundaries='periodique'
   logical         ,parameter :: bernstein=.true.    !If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3
   real            ,parameter :: epsilon=1e-5
 
+
+  real,dimension(1)          :: velocity
+  real,dimension(1)          :: density
+
+  
   type(acoustic_problem)     :: problem
   
   real                       :: t
@@ -55,9 +60,20 @@ program main
   call create_L2B
 
   call create_derive(ordre)
+
+
+  do i=1,size(velocity)
+     velocity(i)=i
+  end do
+    do i=1,size(density)
+     density(i)=1
+  end do
+ 
+ 
   
-  call init_problem(problem,nb_elem,DoF,time_order,total_length,final_time,     &
-                    alpha,bernstein,signal,boundaries,k_max,epsilon)
+  call init_problem(problem,nb_elem,DoF,time_order,velocity,density,            &
+                    total_length,final_time,alpha,bernstein,signal,boundaries,  &
+                    k_max,epsilon)
   
   call init_ApAv(problem)
   call init_UP(problem)

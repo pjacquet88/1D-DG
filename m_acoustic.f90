@@ -9,6 +9,8 @@ module m_acoustic
      integer                         :: nb_elem
      integer                         :: time_order
      logical                         :: bernstein
+     real,dimension(:) ,allocatable  :: density
+     real,dimension(:) ,allocatable  :: velocity
      real                            :: dx
      real                            :: dt
      real                            :: total_length
@@ -126,18 +128,23 @@ contains
        end if
     else if (a.eq.'x') then
        solution=xt**5
+        else if (a.eq.'flat') then
+       solution=0.0
     else
        solution=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
     end if    
   end function solution
 
 
-  subroutine init_problem(problem,nb_elem,DoF,time_order,total_length,          &
-                          final_time,alpha,bernstein,signal,boundaries,k_max,   &
-                          epsilon)
+  subroutine init_problem(problem,nb_elem,DoF,time_order,velocity,density,      &
+                          total_length,final_time,alpha,bernstein,signal,       &
+                          boundaries,k_max,epsilon)
+    
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
+    real,dimension(:)     ,intent(in)  :: velocity
+    real,dimension(:)     ,intent(in)  :: density
     integer               ,intent(in)  :: time_order
     real                  ,intent(in)  :: total_length
     real                  ,intent(in)  :: final_time
@@ -149,6 +156,7 @@ contains
     real                  ,intent(in)  :: epsilon
     
     integer :: i,j
+    integer :: dv,dp,size_velocity,size_density
     real    :: gd,dd
 
     problem%DoF=DoF
@@ -163,10 +171,42 @@ contains
     problem%epsilon=epsilon
     problem%signal=signal
 
+    size_velocity=size(velocity)
+    size_density=size(density)
+    
     allocate(problem%U(DoF*nb_elem),problem%P(DoF*nb_elem))
     problem%U=0.0
     problem%P=0.0
+    if (size(velocity).gt.nb_elem) then
+       print*,'Velocity input size does not correspond'
+       STOP
+    end if
+    if (size(density).gt.nb_elem) then
+       print*,'Density input size does not correspond'
+       STOP
+    end if
+    allocate(problem%velocity(DoF*nb_elem),problem%density(DoF*nb_elem))
 
+    dv=max(nb_elem/size(velocity),1)
+    do i=1,size(velocity)
+       do j=(i-1)*dv+1,i*dv
+          problem%velocity(j)=velocity(i)
+       end do
+    end do
+    do j=size(velocity)*dv+1,nb_elem
+       problem%velocity(j)=velocity(size(velocity))
+    end do
+    
+    dp=max(nb_elem/size(density),1)
+    do i=1,size(density)
+       do j=(i-1)*dp+1,i*dp
+          problem%density(j)=density(i)
+       end do
+    end do
+    do j=size(density)*dp+1,nb_elem
+       problem%density(j)=density(size(density))
+    end do
+    
     print*,'nb_elem              ::',nb_elem
     print*,'DoF                  ::',DoF
     print*,'total_length         ::',total_length
@@ -253,9 +293,9 @@ contains
 
   
   subroutine init_s_loc(s_loc,bernstein)
-    real,dimension(:,:),intent(out) :: s_loc
-    logical            ,intent(in)  :: bernstein
-    integer                         :: DoF
+    real,dimension(:,:),intent(out)          :: s_loc
+    logical            ,intent(in)           :: bernstein
+    integer                                  :: DoF
     integer :: i,j
     real,dimension(:),allocatable :: bpol,dbpol
     real,dimension(:),allocatable :: dlpol
@@ -278,6 +318,7 @@ contains
           end do
        end do
     end if
+         
     deallocate(bpol)      
     deallocate(dbpol)
     deallocate(dlpol) 
@@ -355,9 +396,10 @@ contains
     type(acoustic_problem),intent(inout)        :: problem
 
     real,dimension(problem%nb_elem*problem%DoF,                                 &
-                   problem%nb_elem*problem%DoF) :: s_glob,MINV,F1,F2,           &
-                                                   Av_full,Ap_full,B
+                   problem%nb_elem*problem%DoF) :: s_glob,MINV,                 &
+                                                   F1,F2,Av_full,Ap_full,B,Dp,Dv
     real,dimension(problem%DoF,problem%DoF)     :: m_loc
+    real,dimension(problem%DoF,problem%DoF)     :: Minv_loc
     real,dimension(problem%DoF,problem%DoF)     :: s_loc
     real                                        :: alpha
     
@@ -369,6 +411,17 @@ contains
 
     Ap_full=0.0
     Av_full=0.0
+
+    Dv=0.0
+    Dp=0.0
+
+    do i=1,nb_elem
+       do j=1,DoF
+          Dp(DoF*(i-1)+j,DoF*(i-1)+j)=problem%velocity(i)**2*problem%density(i)
+          Dv(DoF*(i-1)+j,DoF*(i-1)+j)=1.0/problem%density(i)
+       end do
+    end do
+    
     F1=0.0
     F2=0.0
 
@@ -420,6 +473,7 @@ contains
        F2(Dof*nb_elem,1)=0.5-alpha
 
     elseif (problem%boundaries.eq.'dirichlet') then
+
        alpha=problem%alpha
 
        F1(1,1)=1.0+2.0*alpha
@@ -435,6 +489,26 @@ contains
 
        F2(Dof*nb_elem,Dof*nb_elem)=0.0
        F2(Dof*nb_elem,1)=0.0
+
+    elseif (problem%boundaries.eq.'ABC') then
+
+       alpha=problem%alpha
+
+       F2(1,1)=1.0+2.0*alpha
+       F2(1,DoF*nb_elem)=0.0
+
+       F2(Dof*nb_elem,Dof*nb_elem)=0.0!-1.0-2.0*alpha
+       F2(Dof*nb_elem,1)=0.0
+
+       alpha=-problem%alpha
+
+       F1(1,1)=0.0
+       F1(1,DoF*nb_elem)=0.0
+
+       F1(Dof*nb_elem,Dof*nb_elem)=0.0
+       F1(Dof*nb_elem,1)=0.0
+
+       
     elseif (problem%boundaries.eq.'neumann') then
      alpha=problem%alpha
 
@@ -454,27 +528,31 @@ contains
     end if
 
     call init_quadrature
-    allocate(problem%Minv(DoF,DoF))
-    call init_m_loc(m_loc,problem%Minv,problem%bernstein)
+    call init_m_loc(m_loc,Minv_loc,problem%bernstein)
+    allocate(problem%Minv(Dof,Dof))
+    problem%Minv=Minv_loc
     call init_s_loc(s_loc,problem%bernstein)
 
     MINV=0.0
     s_glob=0.0
     do i=1,nb_elem
-       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=problem%Minv
+       MINV(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=Minv_loc
     end do
     do i=1,nb_elem
        s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
     end do
 
     if (problem%bernstein) then
+
        Ap_full=(s_glob+matmul(MINV,F1))
        Av_full=(s_glob+matmul(MINV,F2))
+       Ap_full=matmul(Dp,Ap_full)
+       Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                     problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_order)
-       
+            problem%k_max,problem%epsilon,problem%nb_elem,             &
+            problem%time_order)
+
        if (problem%time_order.eq.4) then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
@@ -487,11 +565,14 @@ contains
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
     else
-          Ap_full=s_glob+F1
-          Av_full=s_glob+F2   
+       
+       Ap_full=s_glob+F1
+       Av_full=s_glob+F2   
 
        Ap_full=matmul(MINV,Ap_full)
+       Ap_full=matmul(Dp,Ap_full)
        Av_full=matmul(MINV,Av_full)
+       Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
@@ -524,27 +605,49 @@ contains
     real,dimension(problem%DoF*problem%nb_elem) :: RHSv,RHSp
     real                                        :: gd,gg
 
+    integer                                     :: last_node,i
+
+    last_node=problem%DoF*problem%nb_elem
     RHSp=0.0
     RHSv=0.0
 
     if (problem%boundaries.eq.'dirichlet') then
        gg=min(0.5*t,0.5)
-       gd=-gg
+       gd=0.0!-gg
        RHSp(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
-       RHSp(size(RHSp))=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
+       RHSp(last_node)=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
        
        RHSv(1)=0.0
        RHSv(size(RHSv))=0.0
 
-       RHSp(1:problem%DoF)=matmul(problem%Minv,RHSp(1:problem%DoF))
-       RHSp(size(RHSp)-problem%DoF+1:size(RHSp))=matmul(problem%Minv,           &
-            RHSp(size(RHSp)-problem%DoF+1:size(RHSp)))
+       RHSp(1:problem%DoF)=problem%velocity(1)**2*problem%density(1)*           &
+                          matmul(problem%Minv,RHSp(1:problem%DoF))
+       RHSp(last_node-problem%DoF+1:last_node)=problem%velocity(1)**2*          &
+                                                problem%density(1)*             &
+                  matmul(problem%Minv,RHSp(last_node-problem%DoF+1:last_node))
     end if
+    if (problem%boundaries.eq.'ABC') then
+       gg=(2*t-0.5)*exp(-(2.0*PI*(2*t-0.5)*2.0)**2.0)*10
+       RHSv(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
+       RHSv(1:problem%DoF)=1.0/problem%density(1)*                &
+            matmul(problem%MINV,RHSv(1:problem%DoF))
 
-       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
-       problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp  
+       gd=2*problem%velocity(problem%nb_elem)*problem%density(problem%nb_elem)* &
+            problem%U(problem%DoF*problem%nb_elem)+                             &
+            problem%P(problem%DoF*problem%nb_elem)
+
+       RHSv(last_node)=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
+       
+      ! RHSv(last_node-problem%DoF+1:last_node)=1.0/problem%density(problem%nb_elem)* &
+      !       matmul(problem%Minv,RHSv(last_node-problem%DoF+1:last_node))
+
+          open(unit=50,file='RHSv.dat',action='write')
+          write(50,*) t,RHSv(last_node-problem%DoF+1:last_node)
+    end if
+    
+    problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
+    problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp  
   end subroutine one_time_step
-
 
  !***************** SORTIE DE RESULTAT *********************************
   
@@ -614,7 +717,7 @@ contains
     integer                                     :: i,j,k
     integer                                     :: DoF,nb_elem
 
-    if (problem%signal.ne.'periodique') then
+    if (problem%boundaries.ne.'periodique') then
        print*,'The error cannot be calculated'
        print*,'The boundary conditions are not periodic'
        RETURN
