@@ -8,20 +8,20 @@ program main
   real              :: x,ddx
 
   integer         ,parameter :: nb_elem=100
-  integer         ,parameter :: ordre=4,DoF=ordre+1  ! Polynoms order
-  integer         ,parameter :: time_order=4
+  integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
+  integer         ,parameter :: time_order=2
   real            ,parameter :: total_length=1.0
-  real            ,parameter :: final_time=1.0
-  real            ,parameter :: alpha=0.5            ! Penalisation value
-  character(len=*),parameter :: signal='ricker'
-  character(len=*),parameter :: boundaries='periodique'
-  logical         ,parameter :: bernstein=.true.    !If F-> Lagrange Elements
+  real            ,parameter :: final_time=2.0
+  real            ,parameter :: alpha=0.0            ! Penalisation value
+  character(len=*),parameter :: signal='flat'
+  character(len=*),parameter :: boundaries='ABC'
+  logical         ,parameter :: bernstein=.false.    !If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3
   real            ,parameter :: epsilon=1e-5
 
 
-  real,dimension(1)          :: velocity
-  real,dimension(1)          :: density
+  real,dimension(2)          :: velocity
+  real,dimension(2)          :: density
 
   
   type(acoustic_problem)     :: problem
@@ -63,10 +63,12 @@ program main
 
 
   do i=1,size(velocity)
-     velocity(i)=i
+     velocity(1)=1
+     velocity(2)=1
   end do
     do i=1,size(density)
-     density(i)=1
+     density(1)=1
+     density(i)=2
   end do
  
  
