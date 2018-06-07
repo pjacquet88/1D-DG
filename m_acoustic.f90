@@ -932,10 +932,9 @@ contains
             matmul(problem%minv_loc,RHSp(last_node-problem%DoF+1:last_node))
     end if
     if (problem%boundaries.eq.'ABC') then
-       gg=(2*t-0.5)*exp(-(2.0*PI*(2*t-0.5)*2.0)**2.0)*10
-       !gg=min(0.5*t,0.5)
+       gg=(2*t-0.5)*exp(-(2.0*PI*(2*t-0.5)*2.0)**2.0)*5/0.341238111
        RHSv(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
-       RHSv(1:problem%DoF)=matmul(problem%minv_loc,RHSv(1:problem%DoF))
+       RHSv(1:problem%DoF)=1.0/(problem%density(1))*matmul(problem%minv_loc,RHSv(1:problem%DoF))
 
       ! gd=2*problem%velocity(problem%nb_elem)*problem%density(problem%nb_elem)* &
       !      problem%U(problem%DoF*problem%nb_elem)+                             &
