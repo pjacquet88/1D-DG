@@ -810,14 +810,26 @@ contains
     
     if (problem%bernstein) then
 
-       Ap_full=(problem%s_glob+matmul(problem%minv_glob,problem%Fp))
        Av_full=(problem%s_glob+matmul(problem%minv_glob,problem%Fv))
-       Ap_full=matmul(problem%Dp,Ap_full)
        Av_full=matmul(problem%Dv,Av_full)
 
-       call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-            problem%k_max,problem%epsilon,problem%nb_elem,             &
+       call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
+            problem%k_max,problem%epsilon,problem%nb_elem,                      &
             problem%time_order)
+
+       call init_minv_glob_abc(problem%minv_glob_abc,problem%m_loc,             &
+            problem%nb_elem,problem%DoF,problem%velocity(problem%nb_elem),      &
+            problem%density(problem%nb_elem),problem%dx,problem%dt)
+       call init_s_glob_abc_p(problem%s_glob_abc_p,problem%nb_elem,problem%DoF, &
+            problem%velocity(problem%nb_elem),problem%density(problem%nb_elem), &
+            problem%dx,problem%dt)
+       
+       Ap_full=matmul(problem%m_glob,problem%s_glob)+problem%Fp
+       Ap_full=matmul(problem%minv_glob_abc,Ap_full)
+       Ap_full=matmul(problem%Dp,Ap_full)
+      
+       App_full=problem%s_glob_abc_p-problem%m_glob
+       App_full=matmul(problem%minv_glob_abc,App_full)
 
        if (problem%time_order.eq.4) then
           B=matmul(Ap_full,Av_full)
@@ -827,6 +839,7 @@ contains
           
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
+       call Full2Sparse(App_full,problem%App)
        
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
@@ -878,7 +891,6 @@ contains
           call Full2Sparse(App_full,problem%App)
          
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
-       !problem%App%Values=(problem%dt/problem%dx)*problem%App%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
     end if
     

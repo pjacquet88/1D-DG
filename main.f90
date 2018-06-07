@@ -15,7 +15,7 @@ program main
   real            ,parameter :: alpha=0.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'
   character(len=*),parameter :: boundaries='ABC'
-  logical         ,parameter :: bernstein=.false.    !If F-> Lagrange Elements
+  logical         ,parameter :: bernstein=.true.    !If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3
   real            ,parameter :: epsilon=1e-5
 
@@ -67,7 +67,7 @@ program main
      velocity(2)=1
   end do
     do i=1,size(density)
-     density(1)=1
+     density(1)=2
      density(i)=2
   end do
  
