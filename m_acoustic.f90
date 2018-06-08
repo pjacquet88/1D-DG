@@ -25,27 +25,18 @@ module m_acoustic
      !----------- MATRICES ---------------------------
      type(sparse_matrix)             :: Ap,App
      type(sparse_matrix)             :: Av
+     type(sparse_matrix)             :: Minv_p,Minv_v
+     !----------- RECEIVER ---------------------------
+     integer                         :: receiver_loc ! beginning of an element
      
-     real,dimension(:,:),allocatable :: m_loc
-     real,dimension(:,:),allocatable :: m_glob
-     real,dimension(:,:),allocatable :: s_loc
-     real,dimension(:,:),allocatable :: minv_loc
-     real,dimension(:,:),allocatable :: minv_glob
-     real,dimension(:,:),allocatable :: minv_glob_abc
-     real,dimension(:,:),allocatable :: s_glob
-     real,dimension(:,:),allocatable :: s_glob_abc_u
-     real,dimension(:,:),allocatable :: s_glob_abc_p     
-     real,dimension(:,:),allocatable :: Dp    
-     real,dimension(:,:),allocatable :: Dv
-     real,dimension(:,:),allocatable :: Fp
-     real,dimension(:,:),allocatable :: Fv
+     
   end type acoustic_problem
 
   real,dimension(15)              :: xx,weight
 
   real,parameter :: PI=acos(-1.0)
 
-  public  :: init_problem,one_time_step,init_ApAv,                              &
+  public  :: init_problem,one_time_step,init_operator,                          &
              solution,free_problem,                                             &
              print_vect,print_sol,error_periodique
 
@@ -169,7 +160,7 @@ contains
     character(len=*)      ,intent(in)  :: boundaries
     integer               ,intent(in)  :: k_max
     real                  ,intent(in)  :: epsilon
-    
+        
     integer :: i,j
     integer :: dv,dp,size_velocity,size_density
     real    :: gd,dd
@@ -223,27 +214,10 @@ contains
     end do
 
     !---------------init matrices------------------
-    call init_quadrature
-    call init_m_loc(problem%m_loc,DoF,bernstein)
-    call init_m_glob(problem%m_glob,problem%m_loc,nb_elem)
-    print*,'m_loc done'
-    call init_minv_loc(problem%minv_loc,problem%m_loc)
-    print*,'minv_loc done'
-    call init_minv_glob(problem%minv_glob,problem%minv_loc,nb_elem)
-    print*,'minv_glob done'
-    call init_s_loc(problem%s_loc,DoF,bernstein)
-    print*,'s_loc done'
-    call init_s_glob(problem%s_glob,problem%s_loc,nb_elem)
-    print*,'s_glob done' 
-    call init_FpFv(problem%Fp,problem%Fv,DoF,nb_elem,boundaries,alpha)
-    print*,'FpFv done'
-    call init_DpDv(problem%Dp,problem%Dv,DoF,nb_elem,problem%velocity,          &
-         problem%density)
-    print*,'Dp Dv done'
     if (problem%boundaries.eq.'ABC') then
-       call init_ApAv_abc(problem)
+       call init_operator_abc(problem)
     else
-       call init_ApAv(problem)
+       call init_operator(problem)
     end if
     print*,'Ap Av done'
     call init_UP(problem)
@@ -271,23 +245,16 @@ contains
     type(acoustic_problem),intent(inout) :: problem
     deallocate(problem%U)
     deallocate(problem%P)
-    deallocate(problem%m_loc)
-    deallocate(problem%m_glob)
-    deallocate(problem%s_loc)
-    deallocate(problem%Minv_loc)
-    deallocate(problem%Minv_glob)
-    deallocate(problem%s_glob)
-    deallocate(problem%Dp)
-    deallocate(problem%Dv)
-    deallocate(problem%Fp)
-    deallocate(problem%Fv)
-    
-    if (problem%boundaries.eq.'ABC') then
-       ! deallocate(problem%s_glob_abc_u)
-       deallocate(problem%s_glob_abc_p)
-       deallocate(problem%minv_glob_abc)
-    end if
+    deallocate(problem%density)
+    deallocate(problem%velocity)
+    call free_sparse_matrix(problem%Ap)
+    call free_sparse_matrix(problem%Av)
+    call free_sparse_matrix(problem%Minv_p)
+    call free_sparse_matrix(problem%Minv_v)
 
+    if (problem%boundaries.eq.'ABC') then
+       call free_sparse_matrix(problem%App)
+    end if
   end subroutine free_problem
 
   
@@ -319,12 +286,11 @@ contains
  !--------------------- Init Matrices ------------------------------------
 
   subroutine init_m_loc(m_loc,DoF,bernstein)
-    real,dimension(:,:),allocatable,intent(out) :: m_loc
-    integer                        ,intent(in)  :: DoF
-    logical                        ,intent(in)  :: bernstein
-    integer :: i,j
+    real,dimension(:,:),intent(out) :: m_loc
+    integer            ,intent(in)  :: DoF
+    logical            ,intent(in)  :: bernstein
+    integer                         :: i,j
 
-    allocate(m_loc(DoF,DoF))
     m_loc=0.0
     
     if (bernstein) then
@@ -348,27 +314,23 @@ contains
     
   end subroutine init_m_loc
 
+  
   subroutine init_minv_loc(minv_loc,m_loc)
-    real,dimension(:,:),allocatable,intent(out) :: minv_loc
-    real,dimension(:,:)            ,intent(in)  :: m_loc
-
-    allocate(minv_loc(size(m_loc,1),size(m_loc,2)))
+    real,dimension(:,:),intent(out) :: minv_loc
+    real,dimension(:,:),intent(in)  :: m_loc
     minv_loc=LU_inv(m_loc)
   end subroutine init_minv_loc
 
   
   subroutine init_m_glob(m_glob,m_loc,nb_elem)
-    real,dimension(:,:),allocatable,intent(out) :: m_glob
-    real,dimension(:,:)            ,intent(in)  :: m_loc
-    integer                        ,intent(in)  :: nb_elem
+    real,dimension(:,:),intent(out) :: m_glob
+    real,dimension(:,:),intent(in)  :: m_loc
+    integer            ,intent(in)  :: nb_elem
 
     integer :: i,DoF
 
     DoF=size(m_loc,1)
-
-
-    allocate(m_glob(nb_elem*DoF,nb_elem*DoF))
-    
+        
     do i=1,nb_elem
        m_glob(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=m_loc
     end do
@@ -376,66 +338,38 @@ contains
   
   
   subroutine init_minv_glob(minv_glob,minv_loc,nb_elem)
-    real,dimension(:,:),allocatable,intent(out) :: minv_glob       
-    real,dimension(:,:)            ,intent(in)  :: minv_loc
-    integer                        ,intent(in)  :: nb_elem
-    integer :: i,DoF
+    real,dimension(:,:),intent(out) :: minv_glob       
+    real,dimension(:,:),intent(in)  :: minv_loc
+    integer            ,intent(in)  :: nb_elem
+    integer                         :: i,DoF
 
     DoF=size(minv_loc,1)
     
-    allocate(minv_glob(nb_elem*DoF,nb_elem*DoF))
-        
     do i=1,nb_elem
        minv_glob(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=minv_loc
-    end do
-
-    print*,'minv_glob'
-    do i=1,DoF
-       print*,minv_glob(i,1:DoF)
     end do
     
   end subroutine init_minv_glob
 
   subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity,density,dx,dt)
-    real,dimension(:,:),allocatable,intent(out) :: minv_glob_abc
-    real,dimension(:,:),allocatable,intent(in)  :: m_loc
-    integer                        ,intent(in)  :: nb_elem
-    integer                        ,intent(in)  :: DoF
-    real                           ,intent(in)  :: velocity
-    real                           ,intent(in)  :: density
-    real                           ,intent(in)  :: dx
-    real                           ,intent(in)  :: dt
+    real,dimension(:,:),intent(out) :: minv_glob_abc
+    real,dimension(:,:),intent(in)  :: m_loc
+    integer            ,intent(in)  :: nb_elem
+    integer            ,intent(in)  :: DoF
+    real               ,intent(in)  :: velocity
+    real               ,intent(in)  :: density
+    real               ,intent(in)  :: dx
+    real               ,intent(in)  :: dt
 
-    integer :: i
-    real,dimension(DoF,DoF) :: m_loc_abc,minv_loc,minv_loc_abc
+    integer                         :: i
+    real,dimension(DoF,DoF)         :: m_loc_abc,minv_loc,minv_loc_abc
 
     m_loc_abc=m_loc
     m_loc_abc(DoF,DoF)=m_loc_abc(DoF,DoF)+0.5*velocity*dt/dx
 
     minv_loc=LU_inv(m_loc)
     minv_loc_abc=LU_inv(m_loc_abc)
-
-    print*,'%%%%%%%%%%%%%%%test m_loc%%%%%%%%%%%%%%%%%'
-    print*,'m_loc'
-    do i=1,DoF
-       print*,m_loc(i,:)
-    end do
-    print*,'m_loc_abc'
-    do i=1,DoF
-       print*,m_loc_abc(i,:)
-    end do
-    print*,'minv_loc'
-    do i=1,DoF
-       print*,minv_loc(i,:)
-    end do
-    print*,'minv_loc_abc'
-    do i=1,DoF
-       print*,minv_loc_abc(i,:)
-    end do
-    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'        
-
     
-    allocate(minv_glob_abc(DoF*nb_elem,DoF*nb_elem))
     minv_glob_abc=0.0
     do i=1,nb_elem-1
        minv_glob_abc(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=minv_loc
@@ -444,36 +378,28 @@ contains
          =minv_loc_abc
   end subroutine init_minv_glob_abc
 
-  subroutine init_s_glob_abc_p(s_glob_abc_p,nb_elem,DoF,velocity,density,dx,dt)
-    real,dimension(:,:),allocatable,intent(out) :: s_glob_abc_p
-    integer                        ,intent(in)  :: nb_elem
-    integer                        ,intent(in)  :: DoF
-    real                           ,intent(in)  :: velocity
-    real                           ,intent(in)  :: density
-    real                           ,intent(in)  :: dx
-    real                           ,intent(in)  :: dt
+  subroutine init_mabs(mabs,nb_elem,DoF,velocity,density,dx,dt)
+    real,dimension(:,:),intent(out) :: mabs
+    integer            ,intent(in)  :: nb_elem
+    integer            ,intent(in)  :: DoF
+    real               ,intent(in)  :: velocity
+    real               ,intent(in)  :: density
+    real               ,intent(in)  :: dx
+    real               ,intent(in)  :: dt
 
-    allocate(s_glob_abc_p(DoF*nb_elem,DoF*nb_elem))
-
-    s_glob_abc_p=0.0
-    s_glob_abc_p(DoF*nb_elem,DoF*nb_elem)=0.5*velocity*dt/dx
-  end subroutine init_s_glob_abc_p
-    
+    mabs=0.0
+    mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity*dt/dx
+  end subroutine init_mabs
 
     
   subroutine init_s_loc(s_loc,DoF,bernstein)
-    real,dimension(:,:),allocatable,intent(out) :: s_loc
-    integer                        ,intent(in)  :: DoF
-    logical                        ,intent(in)  :: bernstein
-    integer :: i,j
-    real,dimension(:),allocatable :: bpol,dbpol
-    real,dimension(:),allocatable :: dlpol
+    real,dimension(:,:),intent(out) :: s_loc
+    integer            ,intent(in)  :: DoF
+    logical            ,intent(in)  :: bernstein
+    integer                         :: i,j
+    real,dimension(DoF)             :: bpol,dbpol
+    real,dimension(DoF)             :: dlpol
 
-
-    allocate(s_loc(DoF,DoF))
-    allocate(bpol(DoF))       
-    allocate(dbpol(DoF))       
-    allocate(dlpol(DoF))          
     
     if (bernstein) then
        s_loc=D1-D0
@@ -486,23 +412,18 @@ contains
              s_loc(i,j)=Int_lxl(base_l(i,:),dlpol)
           end do
        end do
-    end if
-         
-    deallocate(bpol)      
-    deallocate(dbpol)
-    deallocate(dlpol) 
+    end if         
   end subroutine init_s_loc
 
   
   subroutine init_s_glob(s_glob,s_loc,nb_elem)
-    real,dimension(:,:),allocatable,intent(out) :: s_glob
-    real,dimension(:,:)            ,intent(in)  :: s_loc
-    integer                        ,intent(in)  :: nb_elem
+    real,dimension(:,:),intent(out) :: s_glob
+    real,dimension(:,:),intent(in)  :: s_loc
+    integer            ,intent(in)  :: nb_elem
     integer :: i,DoF
 
     DoF=size(s_loc,1)
 
-    allocate(s_glob(nb_elem*DoF,nb_elem*DoF))
 
     do i=1,nb_elem
        s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
@@ -510,18 +431,15 @@ contains
   end subroutine init_s_glob
 
   subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha)
-    real,dimension(:,:),allocatable,intent(out) :: Fp
-    real,dimension(:,:),allocatable,intent(out) :: Fv
-    integer                        ,intent(in)  :: DoF
-    integer                        ,intent(in)  :: nb_elem
-    character(len=*)               ,intent(in)  :: boundaries
-    real                           ,intent(in)  :: alpha
+    real,dimension(:,:),intent(out) :: Fp
+    real,dimension(:,:),intent(out) :: Fv
+    integer            ,intent(in)  :: DoF
+    integer            ,intent(in)  :: nb_elem
+    character(len=*)   ,intent(in)  :: boundaries
+    real               ,intent(in)  :: alpha
 
     integer :: i,j
     real    :: alpha_dummy
-
-    allocate(Fp(DoF*nb_elem,DoF*nb_elem))
-    allocate(Fv(DoF*nb_elem,DoF*nb_elem))
 
     Fp=0.0
     Fv=0.0
@@ -623,36 +541,32 @@ contains
 
        Fv(1,1)=1.0-2.0*alpha_dummy
        Fv(1,DoF*nb_elem)=0.0
-
+       
        Fv(Dof*nb_elem,Dof*nb_elem)=-1.0+2.0*alpha_dummy
        Fv(Dof*nb_elem,1)=0.0
     end if
   end subroutine init_FpFv
 
-  
-    subroutine init_DpDv(Dp,Dv,DoF,nb_elem,velocity,density)
-      real,dimension(:,:),allocatable,intent(out) :: Dp
-      real,dimension(:,:),allocatable,intent(out) :: Dv
-      integer                        ,intent(in)  :: DoF
-      integer                        ,intent(in)  :: nb_elem
-      real,dimension(:)              ,intent(in)  :: velocity
-      real,dimension(:)              ,intent(in)  :: density
-      integer :: i,j
 
-      allocate(Dp(nb_elem*DoF,nb_elem*DoF))
-      allocate(Dv(nb_elem*DoF,nb_elem*DoF))
+  subroutine init_DpDv(Dp,Dv,DoF,nb_elem,velocity,density)
+    real,dimension(:,:),intent(out) :: Dp
+    real,dimension(:,:),intent(out) :: Dv
+    integer            ,intent(in)  :: DoF
+    integer            ,intent(in)  :: nb_elem
+    real,dimension(:)  ,intent(in)  :: velocity
+    real,dimension(:)  ,intent(in)  :: density
+    integer :: i,j
 
-      Dp=0.0
-      Dv=0.0
-      
-      do i=1,nb_elem
-         do j=1,DoF
-            Dp(DoF*(i-1)+j,DoF*(i-1)+j)=velocity(i)**2*density(i)
-            Dv(DoF*(i-1)+j,DoF*(i-1)+j)=1.0/density(i)
-         end do
-      end do
+    Dp=0.0
+    Dv=0.0
 
-    end subroutine init_DpDv
+    do i=1,nb_elem
+       do j=1,DoF
+          Dp(DoF*(i-1)+j,DoF*(i-1)+j)=velocity(i)**2*density(i)
+          Dv(DoF*(i-1)+j,DoF*(i-1)+j)=1.0/density(i)
+       end do
+    end do
+  end subroutine init_DpDv
 
 
   subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_order)
@@ -722,26 +636,39 @@ contains
   end subroutine init_dt
   
 
-  subroutine init_ApAv(problem)
+  subroutine init_operator(problem)
     type(acoustic_problem),intent(inout)        :: problem
-
     real,dimension(problem%nb_elem*problem%DoF,                                 &
-                   problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B
-    integer                 :: i,j
-    integer                 :: DoF,nb_elem
-
+                   problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
+                                                   m_glob,minv_glob,s_glob,     &
+                                                   Fp,Fv,Dp,Dv
+    real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
+    integer                                     :: i,j
+    integer                                     :: DoF,nb_elem
+    
     DoF=problem%DoF           ! For sake of lisibility
     nb_elem=problem%nb_elem
 
+    
+    call init_quadrature
+    call init_m_loc(m_loc,DoF,problem%bernstein)
+    call init_m_glob(m_glob,m_loc,nb_elem)
+    call init_minv_loc(minv_loc,m_loc)
+    call init_minv_glob(minv_glob,minv_loc,nb_elem)
+    call init_s_loc(s_loc,DoF,problem%bernstein)
+    call init_s_glob(s_glob,s_loc,nb_elem)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha)
+    call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
+    
     Ap_full=0.0
     Av_full=0.0
 
     if (problem%bernstein) then
 
-       Ap_full=(problem%s_glob+matmul(problem%minv_glob,problem%Fp))
-       Av_full=(problem%s_glob+matmul(problem%minv_glob,problem%Fv))
-       Ap_full=matmul(problem%Dp,Ap_full)
-       Av_full=matmul(problem%Dv,Av_full)
+       Ap_full=(s_glob+matmul(minv_glob,Fp))
+       Av_full=(s_glob+matmul(minv_glob,Fv))
+       Ap_full=matmul(Dp,Ap_full)
+       Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
             problem%k_max,problem%epsilon,problem%nb_elem,             &
@@ -758,15 +685,21 @@ contains
        
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+       
+       call Full2Sparse(matmul(Dp,minv_glob),problem%Minv_p)
+       call Full2Sparse(matmul(Dv,minv_glob),problem%Minv_v)
+
+       problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
+       problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values       
     else
        
-       Ap_full=problem%s_glob+problem%Fp
-       Av_full=problem%s_glob+problem%Fv   
+       Ap_full=s_glob+Fp
+       Av_full=s_glob+Fv   
 
-       Ap_full=matmul(problem%minv_glob,Ap_full)
-       Ap_full=matmul(problem%Dp,Ap_full)
-       Av_full=matmul(problem%minv_glob,Av_full)
-       Av_full=matmul(problem%Dv,Av_full)
+       Ap_full=matmul(minv_glob,Ap_full)
+       Ap_full=matmul(Dp,Ap_full)
+       Av_full=matmul(minv_glob,Av_full)
+       Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
@@ -778,31 +711,50 @@ contains
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
 
-          call Full2Sparse(Ap_full,problem%Ap)
-          call Full2Sparse(Av_full,problem%Av)
-          
+       call Full2Sparse(Ap_full,problem%Ap)
+       call Full2Sparse(Av_full,problem%Av)
+
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+       
+       call Full2Sparse(matmul(Dp,minv_glob),problem%Minv_p)
+       call Full2Sparse(matmul(Dv,minv_glob),problem%Minv_v)
+
+       problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
+       problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
     print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
-  end subroutine init_ApAv
+  end subroutine init_operator
 
 
   
-   subroutine init_ApAv_abc(problem)
+   subroutine init_operator_abc(problem)
     type(acoustic_problem),intent(inout)        :: problem
-
     real,dimension(problem%nb_elem*problem%DoF,                                 &
-                   problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,test
-    integer                 :: i,j
-    integer                 :: DoF,nb_elem
-
+                   problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
+                                                   m_glob,minv_glob,s_glob,     &
+                                                   Fp,Fv,Dp,Dv,                 &
+                                                   minv_glob_abc,mabs
+    real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
+    integer                                     :: i,j
+    integer                                     :: DoF,nb_elem
+    
     DoF=problem%DoF           ! For sake of lisibility
     nb_elem=problem%nb_elem
+    
+    call init_quadrature
+    call init_m_loc(m_loc,DoF,problem%bernstein)
+    call init_m_glob(m_glob,m_loc,nb_elem)
+    call init_minv_loc(minv_loc,m_loc)
+    call init_minv_glob(minv_glob,minv_loc,nb_elem)
+    call init_s_loc(s_loc,DoF,problem%bernstein)
+    call init_s_glob(s_glob,s_loc,nb_elem)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha)
+    call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
 
     Ap_full=0.0
     Av_full=0.0
@@ -810,26 +762,25 @@ contains
     
     if (problem%bernstein) then
 
-       Av_full=(problem%s_glob+matmul(problem%minv_glob,problem%Fv))
-       Av_full=matmul(problem%Dv,Av_full)
+       Av_full=(s_glob+matmul(minv_glob,Fv))
+       Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
-            problem%k_max,problem%epsilon,problem%nb_elem,                      &
-            problem%time_order)
+            problem%k_max,problem%epsilon,problem%nb_elem,problem%time_order)
 
-       call init_minv_glob_abc(problem%minv_glob_abc,problem%m_loc,             &
-            problem%nb_elem,problem%DoF,problem%velocity(problem%nb_elem),      &
-            problem%density(problem%nb_elem),problem%dx,problem%dt)
-       call init_s_glob_abc_p(problem%s_glob_abc_p,problem%nb_elem,problem%DoF, &
-            problem%velocity(problem%nb_elem),problem%density(problem%nb_elem), &
-            problem%dx,problem%dt)
+       call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
+                               problem%velocity(nb_elem),                       &
+                               problem%density(nb_elem),problem%dx,problem%dt)
+       call init_mabs(mabs,nb_elem,DoF,                         &
+                              problem%velocity(nb_elem),                        &
+                              problem%density(nb_elem),problem%dx,problem%dt)
        
-       Ap_full=matmul(problem%m_glob,problem%s_glob)+problem%Fp
-       Ap_full=matmul(problem%minv_glob_abc,Ap_full)
-       Ap_full=matmul(problem%Dp,Ap_full)
+       Ap_full=matmul(m_glob,s_glob)+Fp
+       Ap_full=matmul(minv_glob_abc,Ap_full)
+       Ap_full=matmul(Dp,Ap_full)
       
-       App_full=problem%s_glob_abc_p-problem%m_glob
-       App_full=matmul(problem%minv_glob_abc,App_full)
+       App_full=mabs-m_glob
+       App_full=matmul(minv_glob_abc,App_full)
 
        if (problem%time_order.eq.4) then
           B=matmul(Ap_full,Av_full)
@@ -843,42 +794,42 @@ contains
        
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+
+       call Full2Sparse(matmul(Dp,minv_glob_abc),problem%Minv_p)
+       call Full2Sparse(matmul(Dv,minv_glob),problem%Minv_v)
+       
+       problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
+       problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     else
        
-       Av_full=problem%s_glob+problem%Fv   
+       Av_full=s_glob+Fv   
 
 
-       Av_full=matmul(problem%minv_glob,Av_full)
-       Av_full=matmul(problem%Dv,Av_full)
+       Av_full=matmul(minv_glob,Av_full)
+       Av_full=matmul(Dv,Av_full)
 
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
                      problem%time_order)
 
-       call init_minv_glob_abc(problem%minv_glob_abc,problem%m_loc,             &
-            problem%nb_elem,problem%DoF,problem%velocity(problem%nb_elem),      &
-            problem%density(problem%nb_elem),problem%dx,problem%dt)
-       call init_s_glob_abc_p(problem%s_glob_abc_p,problem%nb_elem,problem%DoF, &
-            problem%velocity(problem%nb_elem),problem%density(problem%nb_elem), &
-            problem%dx,problem%dt)
-       
-       Ap_full=problem%s_glob+problem%Fp
-       
-       Ap_full=matmul(problem%minv_glob_abc,Ap_full)
-       Ap_full=matmul(problem%Dp,Ap_full)
-       
-       
-       App_full=problem%s_glob_abc_p-problem%m_glob
-       App_full=matmul(problem%minv_glob_abc,App_full)
-       !App_full=matmul((problem%dt/problem%dx)*problem%Dp,App_full)
-       !App_full=App_full-matmul(problem%minv_glob_abc,problem%m_glob)
 
-       print*,'Dp'
-       print*,problem%Dp(nb_elem*DoF,nb_elem*DoF),maxval(problem%Dp)
-       test=matmul(problem%Dp,problem%Fp)
-       print*,'test',test(nb_elem*DoF,nb_elem*DoF)
+       call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
+                               problem%velocity(nb_elem),                       &
+                               problem%density(nb_elem),problem%dx,problem%dt)
+       call init_mabs(mabs,nb_elem,DoF,                         &
+                              problem%velocity(nb_elem),                        &
+                              problem%density(nb_elem),problem%dx,problem%dt)
        
+       Ap_full=s_glob+Fp
+       
+       Ap_full=matmul(minv_glob_abc,Ap_full)
+       Ap_full=matmul(Dp,Ap_full)
+       
+       
+       App_full=mabs-m_glob
+       App_full=matmul(minv_glob_abc,App_full)
+
        if (problem%time_order.eq.4) then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
@@ -892,13 +843,19 @@ contains
          
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
+
+       call Full2Sparse(matmul(Dp,minv_glob_abc),problem%Minv_p)
+       call Full2Sparse(matmul(Dv,minv_glob),problem%Minv_v)
+
+       problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
+       problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
     print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
-  end subroutine init_ApAv_abc
+  end subroutine init_operator_abc
   
   
  !**************** RESOLUTION DU PROBLEM *************************************
@@ -918,23 +875,32 @@ contains
     if (problem%boundaries.eq.'dirichlet') then
        gg=min(0.5*t,0.5)
        gd=0.0!-gg
-       RHSp(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
-       RHSp(last_node)=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
+       RHSp(1)=gg*(-1.0-2.0*problem%alpha)
+       RHSp(last_node)=gd*(1.0+2.0*problem%alpha)
        
        RHSv(1)=0.0
        RHSv(size(RHSv))=0.0
 
-       RHSp(1:problem%DoF)=problem%velocity(1)**2*problem%density(1)*           &
-                          matmul(problem%minv_loc,RHSp(1:problem%DoF))
-       RHSp(last_node-problem%DoF+1:last_node)=                                 &
-            problem%velocity(problem%nb_elem)**2*                               &
-            problem%density(problem%nb_elem)*                                   &
-            matmul(problem%minv_loc,RHSp(last_node-problem%DoF+1:last_node))
+       RHSv=sparse_matmul(problem%Minv_v,RHSv)
+       RHSp=sparse_matmul(problem%Minv_p,RHSp)
+
+
+       ! RHSp(1:problem%DoF)=problem%velocity(1)**2*problem%density(1)*           &
+       !                    matmul(problem%minv_loc,RHSp(1:problem%DoF))
+       ! RHSp(last_node-problem%DoF+1:last_node)=                                 &
+       !      problem%velocity(problem%nb_elem)**2*                               &
+       !      problem%density(problem%nb_elem)*                                   &
+       !      matmul(problem%minv_loc,RHSp(last_node-problem%DoF+1:last_node))
     end if
     if (problem%boundaries.eq.'ABC') then
        gg=(2*t-0.5)*exp(-(2.0*PI*(2*t-0.5)*2.0)**2.0)*5/0.341238111
-       RHSv(1)=gg*(-1.0-2.0*problem%alpha)*(problem%dt/problem%dx)
-       RHSv(1:problem%DoF)=1.0/(problem%density(1))*matmul(problem%minv_loc,RHSv(1:problem%DoF))
+       RHSv(1)=gg*(-1.0-2.0*problem%alpha)
+
+       RHSv=sparse_matmul(problem%Minv_v,RHSv)
+       RHSp=sparse_matmul(problem%Minv_p,RHSp)
+
+       
+      ! RHSv(1:problem%DoF)=1.0/(problem%density(1))*matmul(problem%minv_loc,RHSv(1:problem%DoF))
 
       ! gd=2*problem%velocity(problem%nb_elem)*problem%density(problem%nb_elem)* &
       !      problem%U(problem%DoF*problem%nb_elem)+                             &
