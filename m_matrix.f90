@@ -33,8 +33,8 @@ contains
     integer :: n, info,i
 
     ! External procedures defined in LAPACK
-    external DGETRF
-    external DGETRI
+    external SGETRF
+    external SGETRI
 
     ! Store A in Ainv to prevent it from being overwritten by LAPACK
     LU_inv = A
@@ -43,7 +43,7 @@ contains
     ! DGETRF computes an LU factorization of a general M-by-N matrix A
     ! using partial pivoting with row interchanges.+
 
-    call DGETRF(n, n, LU_inv, n, ipiv, info)
+    call SGETRF(n, n, LU_inv, n, ipiv, info)
 
     if (info /= 0) then
        ! do i=1,n
@@ -54,7 +54,7 @@ contains
 
     ! DGETRI computes the inverse of a matrix using the LU factorization
     ! computed by DGETRF.
-    call DGETRI(n, LU_inv, n, ipiv, work, n, info)
+    call SGETRI(n, LU_inv, n, ipiv, work, n, info)
 
     if (info /= 0) then
        stop 'Matrix inversion failed!'

@@ -28,6 +28,13 @@ module m_acoustic
      type(sparse_matrix)             :: Minv_p,Minv_v
      !----------- RECEIVER ---------------------------
      integer                         :: receiver_loc ! beginning of an element
+     real,dimension(:,:),allocatable :: receiver
+     real,dimension(:,:),allocatable :: data
+     real,dimension(:,:),allocatable :: RHS_backward
+     integer                         :: n_time_step
+     integer                         :: n_display
+     integer                         :: n_frame
+     logical                         :: forward
      
      
   end type acoustic_problem
@@ -144,7 +151,7 @@ contains
 
   subroutine init_problem(problem,nb_elem,DoF,time_order,velocity,density,      &
                           total_length,final_time,alpha,bernstein,signal,       &
-                          boundaries,k_max,epsilon)
+                          boundaries,k_max,epsilon,receiver_loc,n_frame,forward)
     
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
@@ -160,7 +167,10 @@ contains
     character(len=*)      ,intent(in)  :: boundaries
     integer               ,intent(in)  :: k_max
     real                  ,intent(in)  :: epsilon
-        
+    integer               ,intent(in)  :: receiver_loc
+    integer               ,intent(in)  :: n_frame
+    logical               ,intent(in)  :: forward
+    
     integer :: i,j
     integer :: dv,dp,size_velocity,size_density
     real    :: gd,dd
@@ -170,13 +180,18 @@ contains
     problem%nb_elem=nb_elem
     problem%total_length=total_length
     problem%dx=total_length/(nb_elem)
+    problem%final_time=final_time
     problem%alpha=alpha
     problem%bernstein=bernstein
     problem%boundaries=boundaries
     problem%k_max=k_max
     problem%epsilon=epsilon
     problem%signal=signal
+    problem%receiver_loc=receiver_loc
+    problem%n_frame=n_frame
+    problem%forward=forward
 
+    
     size_velocity=size(velocity)
     size_density=size(density)
     
@@ -212,12 +227,37 @@ contains
     do j=size(density)*dp+1,nb_elem
        problem%density(j)=density(size(density))
     end do
-
+    
     !---------------init matrices------------------
     if (problem%boundaries.eq.'ABC') then
        call init_operator_abc(problem)
     else
        call init_operator(problem)
+    end if
+    problem%n_time_step=int(problem%final_time/problem%dt)
+    if (problem%n_time_step.le.problem%n_frame) then
+       problem%n_display=1
+    else
+       problem%n_display=int(problem%n_time_step/problem%n_frame)
+    end if
+    
+    allocate(problem%receiver(0:problem%n_time_step/problem%n_display,2))
+    if (.not.problem%forward) then
+       allocate(problem%data(0:problem%n_time_step/problem%n_display,2))
+       allocate(problem%RHS_backward(0:problem%n_time_step/problem%n_display,2))
+       open(unit=10,file='data.dat',status="old", action="read")
+       do i=0,size(problem%data,1)-1
+          read(10,*) problem%data(i,1),problem%data(i,2)
+       end do
+       close(10)
+       open(unit=10,file='receiver.dat',status="old", action="read")
+       do i=0,size(problem%RHS_backward,1)-1
+          read(10,*) problem%RHS_backward(i,1),problem%RHS_backward(i,2)
+       end do
+       close(10)
+       do i=0,size(problem%RHS_backward,1)-1
+          problem%RHS_backward(i,2)=problem%data(i,2)!-problem%RHS_backward(i,2)
+       end do
     end if
     print*,'Ap Av done'
     call init_UP(problem)
@@ -389,6 +429,7 @@ contains
 
     mabs=0.0
     mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity*dt/dx
+    !mabs(1,1)=-0.5*velocity*dt/dx
   end subroutine init_mabs
 
     
@@ -430,13 +471,15 @@ contains
     end do
   end subroutine init_s_glob
 
-  subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha)
+  subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha,forward,receiver_loc)
     real,dimension(:,:),intent(out) :: Fp
     real,dimension(:,:),intent(out) :: Fv
     integer            ,intent(in)  :: DoF
     integer            ,intent(in)  :: nb_elem
     character(len=*)   ,intent(in)  :: boundaries
     real               ,intent(in)  :: alpha
+    logical            ,intent(in)  :: forward
+    integer            ,intent(in)  :: receiver_loc
 
     integer :: i,j
     real    :: alpha_dummy
@@ -519,6 +562,11 @@ contains
        Fv(Dof*nb_elem,Dof*nb_elem)=0.0!-1.0-2.0*alpha_dummy
        Fv(Dof*nb_elem,1)=0.0
 
+       ! if (.not.forward) then
+       !    Fv(DoF*receiver_loc,DoF*receiver_loc)=-1.0-2.0*alpha_dummy
+       !    Fv(DoF*receiver_loc+1,DoF*receiver_loc+1)=1.0+2.0*alpha_dummy
+       ! end if
+       
        alpha_dummy=-alpha
 
        Fp(1,1)=0.0
@@ -526,7 +574,6 @@ contains
 
        Fp(Dof*nb_elem,Dof*nb_elem)=-1.0!*2
        Fp(Dof*nb_elem,1)=0.0
-
 
     elseif (boundaries.eq.'neumann') then
        alpha_dummy=alpha
@@ -657,7 +704,7 @@ contains
     call init_minv_glob(minv_glob,minv_loc,nb_elem)
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
-    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
     
     Ap_full=0.0
@@ -753,7 +800,7 @@ contains
     call init_minv_glob(minv_glob,minv_loc,nb_elem)
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
-    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
 
     Ap_full=0.0
@@ -865,12 +912,13 @@ contains
 
     real,dimension(problem%DoF*problem%nb_elem) :: RHSv,RHSp
     real                                        :: gd,gg
-
+    real                                        :: f0
     integer                                     :: last_node,i
 
     last_node=problem%DoF*problem%nb_elem
     RHSp=0.0
     RHSv=0.0
+    f0=3.0
 
     if (problem%boundaries.eq.'dirichlet') then
        gg=min(0.5*t,0.5)
@@ -884,32 +932,21 @@ contains
        RHSv=sparse_matmul(problem%Minv_v,RHSv)
        RHSp=sparse_matmul(problem%Minv_p,RHSp)
 
-
-       ! RHSp(1:problem%DoF)=problem%velocity(1)**2*problem%density(1)*           &
-       !                    matmul(problem%minv_loc,RHSp(1:problem%DoF))
-       ! RHSp(last_node-problem%DoF+1:last_node)=                                 &
-       !      problem%velocity(problem%nb_elem)**2*                               &
-       !      problem%density(problem%nb_elem)*                                   &
-       !      matmul(problem%minv_loc,RHSp(last_node-problem%DoF+1:last_node))
     end if
     if (problem%boundaries.eq.'ABC') then
-       gg=(2*t-0.5)*exp(-(2.0*PI*(2*t-0.5)*2.0)**2.0)*5/0.341238111
-       RHSv(1)=gg*(-1.0-2.0*problem%alpha)
+       if (problem%forward) then
+          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+          RHSv(problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+         ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0+2.0*problem%alpha)
+       else
+          gg=eval_RHS(problem%RHS_backward,t,problem%final_time)
+          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-2.0*problem%alpha)
+       end if
+          
+          RHSv=sparse_matmul(problem%Minv_v,RHSv)
+          RHSp=sparse_matmul(problem%Minv_p,RHSp)
 
-       RHSv=sparse_matmul(problem%Minv_v,RHSv)
-       RHSp=sparse_matmul(problem%Minv_p,RHSp)
-
-       
-      ! RHSv(1:problem%DoF)=1.0/(problem%density(1))*matmul(problem%minv_loc,RHSv(1:problem%DoF))
-
-      ! gd=2*problem%velocity(problem%nb_elem)*problem%density(problem%nb_elem)* &
-      !      problem%U(problem%DoF*problem%nb_elem)+                             &
-      !      problem%P(problem%DoF*problem%nb_elem)
-
-      ! RHSv(last_node)=gd*(1.0+2.0*problem%alpha)*(problem%dt/problem%dx)
-       
-      ! RHSv(last_node-problem%DoF+1:last_node)=1.0/problem%density(problem%nb_elem)* &
-      !       matmul(problem%minv_loc,RHSv(last_node-problem%DoF+1:last_node))
     end if
     
     problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
@@ -920,6 +957,55 @@ contains
        problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
     end if
   end subroutine one_time_step
+
+
+  subroutine all_time_step(problem,sortie)
+    type(acoustic_problem),intent(inout) :: problem
+    logical               ,intent(in)    :: sortie
+    integer                              :: i
+    real                                 :: t
+    
+    if (sortie) then
+       call print_sol(problem,0)
+    end if
+
+    problem%receiver(0,1)=0.0
+    problem%receiver(0,2)=0.0
+    
+    do i=1,problem%n_time_step
+       t=i*problem%dt
+       call one_time_step(problem,t)
+
+       if (modulo(i,problem%n_display).eq.0) then
+
+          if (problem%receiver_loc.ne.0) then
+              problem%receiver(i/problem%n_display,1)=t
+              problem%receiver(i/problem%n_display,2)=problem%P(problem%receiver_loc*problem%DoF+1)
+
+             if (sortie) then
+                if (modulo(i,problem%n_display).eq.0) then
+                   call print_sol(problem,i/problem%n_display)
+                end if
+             end if
+          end if
+       end if
+    end do
+    
+    if (problem%forward) then
+       open(23, file="receiver.dat", form="formatted")
+       do i=0,size(problem%receiver,1)-1
+          write(23,*) problem%receiver(i,1),problem%receiver(i,2)
+       end do
+       close(23)
+    end if
+    
+    if (problem%forward) then
+       do i=0,problem%n_time_step
+          t=i*problem%dt
+          write(25,*) t,eval_RHS(problem%receiver,t,problem%final_time)
+       end do
+    end if
+   end subroutine all_time_step
 
  !***************** SORTIE DE RESULTAT *********************************
   
@@ -959,6 +1045,7 @@ contains
           end do
        end do
     end if
+    close(2)
   end subroutine print_vect
 
 
@@ -966,12 +1053,19 @@ contains
     type(acoustic_problem),intent(in) :: problem
     integer               ,intent(in) :: N
 
-    call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
-                    problem%bernstein,N,'U')
+    if (problem%forward) then
+      ! call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
+     !       problem%bernstein,N,'U')
 
-    call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
-                    problem%bernstein,N,'P')
+       call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
+            problem%bernstein,N,'P')
+    else
+      ! call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
+      !      problem%bernstein,N,'Ub')
 
+       call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
+            problem%bernstein,problem%n_frame-N,'B')
+    end if
   end subroutine print_sol
   
 
@@ -1045,5 +1139,26 @@ contains
     print*,'-----------------------------'
 
   end subroutine error_periodique
+
+  function eval_RHS(RHS,t,final_time)
+    real,dimension(:,:),intent(in) :: RHS
+    real               ,intent(in) :: t
+    real               ,intent(in) :: final_time
+    real                           :: eval_RHS
+    integer                        :: i
+    real                           :: t2
+
+    t2=final_time-t
+
+    i=1
+    do while ((RHS(i,1).le.t2).and.(i.ne.size(RHS,1)))
+       i=i+1
+    end do
+    i=i-1
+
+    eval_RHS=(t2-RHS(i,1))*RHS(i+1,2)+(RHS(i+1,1)-t2)*RHS(i,2)
+    eval_RHS=eval_RHS/(RHS(i+1,1)-RHS(i,1))
+
+  end function eval_RHS
   
 end module m_acoustic
