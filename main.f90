@@ -1,55 +1,50 @@
 program main
-  use load_function
+  use m_file_function
   use m_polynom
   use m_acoustic
 
   implicit none
 
-  integer:: i,j
-  real              :: x,ddx
-
-  integer         ,parameter :: nb_elem=200
+  !*************** Problem Parameters *******************************************
+  integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
-  integer         ,parameter :: time_order=2
-  real            ,parameter :: total_length=2.0
-  real            ,parameter :: final_time=5.0
+  integer         ,parameter :: time_order=2         ! time order 2 or 4 (Leap Frog)
+  real            ,parameter :: total_length=2.0     ! domain length
+  real            ,parameter :: final_time=10.0      ! final time
   real            ,parameter :: alpha=1.0            ! Penalisation value
-  character(len=*),parameter :: signal='flat'
-  character(len=*),parameter :: boundaries='ABC'
+  character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
+  character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
   logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
-  integer         ,parameter :: k_max=1e3
-  real            ,parameter :: epsilon=1e-5
-  integer         ,parameter :: n_frame=1000
-  integer         ,parameter :: source_loc=1
-  integer         ,parameter :: receiver_loc=3
-  logical         ,parameter :: use_data_model=.true.
+  integer         ,parameter :: k_max=1e3            ! iter max for power method algo.
+  real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
+  integer         ,parameter :: n_frame=1000         ! nb of times where sol. is saved
+  integer         ,parameter :: source_loc=1         ! location of the source (elemts)
+  integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
+  logical         ,parameter :: use_data_model=.true.! if T, data = forward receiver
   
-  real,dimension(1)          :: velocity
-  real,dimension(6)          :: density
+  real,dimension(1)          :: velocity             ! velocity model
+  real,dimension(6)          :: density              ! density model
+  !******************************************************************************
 
-  
-  type(acoustic_problem)     :: problem,forward,backward
-  real                       :: t
-  integer                    :: n_time_step
-  integer                    :: n_display
-  real                       :: errorU
-  real                       :: errorP
-  real,dimension(:),allocatable :: P,B,Im,PB,Im_lap
-  integer                       :: nb_frame
 
-  !********************** Animation et Sorties ******************************
-  logical,parameter          :: animation=.false.
+  !**************** Animation and Outputs ***************************************
+  logical,parameter          :: animation=.true.
   logical,parameter          :: sortie=.true.
   logical,parameter          :: RTM=.true.
-  !**************************************************************************
+  !******************************************************************************
 
-  integer :: values(1:8), k
+
+  !*************** Main Variables ***********************************************
+  type(acoustic_problem)        :: forward,backward
+  real,dimension(:),allocatable :: P,B,Im,Im_lap   ! vector for Imaging Condition
+
+  integer                           :: i,j
+  integer                           :: values(1:8), k
   integer,dimension(:), allocatable :: seed
-
-  real    :: t0,t1,t2
-
+  real                              :: t0,t1,t2
+  !******************************************************************************
+  
   call date_and_time(values=values)
-
   call random_seed(size=k)
   allocate(seed(1:k))
   seed(:) = values(8)
@@ -59,16 +54,18 @@ program main
   !********************* ACOUSTIC EQUATION SIMULATION  **************************
 
 
-  !------------------------ Initialization --------------------------------------
- 
+  !********************** Initialization ***************************************
+  
+  !*********** Polynomial initialization *************
   call init_basis_b(ordre)
   call init_basis_l(ordre)
-
   call create_B2L
   call create_L2B
-
   call create_derive(ordre)
+  !***************************************************
 
+  
+  !********** Model Initialization *******************
   do i=1,size(velocity)
      velocity(i)=i
   end do
@@ -78,12 +75,13 @@ program main
 
   
   call cpu_time(t0)
+  
   !------------------------------ Forward ---------------------------------------
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%% FORWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   call init_problem(forward,nb_elem,DoF,time_order,velocity,density,            &
-       total_length,final_time,alpha,bernstein,signal,boundaries,  &
+                    total_length,final_time,alpha,bernstein,signal,boundaries,  &
                     k_max,epsilon,source_loc,receiver_loc,n_frame,.true.)
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
@@ -94,6 +92,7 @@ program main
   end if
   
   call cpu_time(t1)
+  
   if (RTM) then
      !------------------------------ Backward ------------------------------------
      print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
@@ -103,20 +102,18 @@ program main
      call init_problem(backward,nb_elem,DoF,time_order,velocity,density,        &
           total_length,final_time,alpha,bernstein,signal,boundaries,            &
           k_max,epsilon,source_loc,receiver_loc,n_frame,.false.)
-
      call print_sol(backward,backward%n_frame)
-
      call all_time_step(backward,sortie)
   end if
   call cpu_time(t2)
 
   
   !--------------------- Animation ----------------------------------------------
-  nb_frame=int(forward%n_time_step/forward%n_display)
+  !n_frame=int(forward%n_time_step/forward%n_display)
     if (animation.and.sortie) then
      open(unit=78,file='script.gnuplot',action='write')
      write(78,*)'load "trace1.gnuplot"'
-     write(78,*)'n=',nb_frame
+     write(78,*)'n=',n_frame
      write(78,*)'a=',5
      write(78,*)'load "trace2.gnuplot"'
      close(78)
@@ -138,10 +135,10 @@ program main
 
   !---------------------- RTM Post Process ---------------------------------------
   if (RTM) then
-     allocate(P(nb_elem*(DoF-1)+1))
-     allocate(B(nb_elem*(DoF-1)+1))
-     allocate(Im(nb_elem*(DoF-1)+1))
-     allocate(Im_lap(nb_elem*(DoF-1)+1))
+     allocate(P(nb_elem*(DoF-1)+1))         ! forward pressure vector
+     allocate(B(nb_elem*(DoF-1)+1))         ! backward pressure vector
+     allocate(Im(nb_elem*(DoF-1)+1))        ! imaging condition
+     allocate(Im_lap(nb_elem*(DoF-1)+1))    ! filtered imaging condition
 
      Im=0.0
 
@@ -158,8 +155,6 @@ program main
      open(unit=33,file='RTM.dat')
      open(unit=34,file='RTM_Lap.dat')
      do i=1,nb_elem*(DoF-1)+1
-        !     write(33,*) real(i)/(nb_elem*DoF),Im(i)
-
         write(33,*) real(i)/(nb_elem*(DoF-1)+1),Im(i)
         write(34,*) real(i)/(nb_elem*(DoF-1)+1),Im_lap(i)
      end do

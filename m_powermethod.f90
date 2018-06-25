@@ -2,12 +2,12 @@ module m_powermethod
   use m_matrix
 
   implicit none
-  
+
   public  :: power_method,power_method_sparse
   private :: norm 
-  
+
 contains
-  
+
   subroutine power_method(A,max_value,k_max,epsilon)
     real,dimension(:,:),intent(in)  :: A
     real               ,intent(out) :: max_value
@@ -28,7 +28,7 @@ contains
     end do
     q1=1/(norm(q1))*q1
     q2=q1
-    
+
     do while((r.ge.epsilon).and.(k.le.k_max))
        z=matmul(A,q2)
        q2=1.0/(norm(z))*z
@@ -36,15 +36,15 @@ contains
        r=norm(q2-q1)
        q1=q2
        k=k+1
-       
+
        ! if (modulo(k,100).eq.0) then
        !    print*,k,r,max_value,q1(1),q1(2),q1(3)
        ! end if
-       
+
     end do
   end subroutine power_method
 
-   subroutine power_method_sparse(A,max_value,k_max,epsilon)
+  subroutine power_method_sparse(A,max_value,k_max,epsilon)
     type(sparse_matrix),intent(in)  :: A
     real               ,intent(out) :: max_value
     integer            ,intent(in)  :: k_max
@@ -69,7 +69,7 @@ contains
        ! if (modulo(k,100).eq.0) then
        !    print*,k,r,max_value
        ! end if 
-       
+
     end do
   end subroutine power_method_sparse
 
@@ -79,6 +79,6 @@ contains
     real                         :: norm
     norm=sqrt(dot_product(v,v))
   end function norm
-  
+
 
 end module m_powermethod

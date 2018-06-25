@@ -19,7 +19,7 @@ module m_polynom
 contains
 
 
-  !****************FONCTIONS ANNEXES**********************************************
+  !****************FONCTIONS ANNEXES********************************************
 
   function C(n,k)
     integer,intent(in) :: n,k
@@ -37,7 +37,7 @@ contains
     end if
   end function C
 
-  !****************FONCTIONS BERNSTEIN********************************************
+  !****************FONCTIONS BERNSTEIN******************************************
 
   function b_basis(i,j,x)
     integer,intent(in) :: i,j
@@ -75,6 +75,7 @@ contains
   end subroutine free_basis_b
 
 
+  ! eval bernstein polynomial using De Calsteljau algorithm
   function eval_polynom_b(pol,x)
     real,dimension(:),intent(in) :: pol
     real             ,intent(in) :: x
@@ -165,7 +166,7 @@ contains
   end function eval_polynom_l
 
 
-  !****************FONCTIONS PASSAGES*******************************************
+  !**************** LAGRANGE <--> BERNSTEIN *************************************
 
   subroutine create_B2L
     integer :: i,j
@@ -202,7 +203,6 @@ contains
 
 
   subroutine create_L2B
-    ! L2B=inv(B2L)
     L2B=LU_inv(B2L)
   end subroutine create_L2B
 
@@ -220,7 +220,7 @@ contains
 
 
 
-  !!****************FONCTIONS DERIVES*********************************************
+  !!****************FONCTIONS DERIVES*******************************************
 
   subroutine create_derive(ordre)
     integer,intent(in) :: ordre

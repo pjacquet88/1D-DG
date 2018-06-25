@@ -2,58 +2,56 @@ module m_acoustic
   use m_polynom
   use m_matrix
   use m_powermethod
+  use m_file_function
   implicit none
   
   type acoustic_problem
-     integer                         :: DoF
-     integer                         :: nb_elem
-     integer                         :: time_order
-     logical                         :: bernstein
-     real,dimension(:) ,allocatable  :: density
-     real,dimension(:) ,allocatable  :: velocity
-     real                            :: dx
-     real                            :: dt
-     real                            :: total_length
-     real                            :: final_time
-     real                            :: alpha
-     real,dimension(:),allocatable   :: U
-     real,dimension(:),allocatable   :: P
-     character(len=20)               :: boundaries
-     character(len=20)               :: signal
-     integer                         :: k_max
-     real                            :: epsilon
+     integer                         :: DoF          ! nb of degree of freedom 
+     integer                         :: nb_elem      ! nb of elements
+     integer                         :: time_order   ! time order 2 or 4 (LF)
+     logical                         :: bernstein    ! bool for bernstein elmnts
+     real,dimension(:) ,allocatable  :: density      ! density model
+     real,dimension(:) ,allocatable  :: velocity     ! velocity model
+     real                            :: dx           ! element length
+     real                            :: dt           ! step time length
+     real                            :: total_length ! domain length
+     real                            :: final_time   ! final time
+     real                            :: alpha        ! penalisation value
+     real,dimension(:),allocatable   :: U            ! velocity unknowns vector
+     real,dimension(:),allocatable   :: P            ! pressure unknowns vector
+     character(len=20)               :: boundaries   ! string for BC
+     character(len=20)               :: signal       ! string to initialize U,P
+     integer                         :: k_max        ! iter max for power method
+     real                            :: epsilon      ! precition for power method algo.
      !----------- MATRICES ---------------------------
-     type(sparse_matrix)             :: Ap,App
+     type(sparse_matrix)             :: Ap,App       
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
      !----------- SOURCE & RECEIVER ---------------------------
      integer                         :: source_loc   ! beginning of an element
      integer                         :: receiver_loc ! beginning of an element
-     real,dimension(:,:),allocatable :: receiver
-     real,dimension(:,:),allocatable :: data
-     real,dimension(:,:),allocatable :: RHS_backward
-     integer                         :: n_time_step
-     integer                         :: n_display
-     integer                         :: n_frame
-     logical                         :: forward
-     
-     
+     real,dimension(:,:),allocatable :: receiver     ! vector describing receivers values as a function of time
+     real,dimension(:,:),allocatable :: data         ! vector describing real datas values as a function of time
+     real,dimension(:,:),allocatable :: RHS_backward ! what we inject in the backward
+     integer                         :: n_time_step  ! nb of time step
+     integer                         :: n_display    ! nb of time step between each saves
+     integer                         :: n_frame      ! nb of time where the sol. is saved
+     logical                         :: forward      ! T=forward of F=backward
   end type acoustic_problem
-
-  real,dimension(15)              :: xx,weight
-
+  
+  real,dimension(15)                 :: xx,weight
   real,parameter :: PI=acos(-1.0)
 
-  public  :: init_problem,one_time_step,init_operator,                          &
-             solution,free_problem,                                             &
-             print_vect,print_sol,error_periodique
+  public  :: init_problem,init_operator,all_time_step,                          &
+             free_problem,                                                      &
+             print_sol,error_periodique
 
-  private :: xx,weight,                                                         &
+  private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
-             PI
+             init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
+             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_RHS,one_time_step
   
 contains
-
 
 
   !****************** QUADRATURE ***********************************************
@@ -119,30 +117,30 @@ contains
   end function Int_lxl
 
 
-    !******************* INIT PROBLEM **************************************
+  !******************* INIT PROBLEM **************************************
   
-  function solution(x,dt,a)
+  function solution(x,dt,signal)
     real,intent(in) :: x
     real,intent(in) :: dt
-    character(len=*),intent(in) :: a
+    character(len=*),intent(in) :: signal
     real                        :: solution
 
     real                        :: xt
 
     xt=x+dt
     
-    if (a.eq.'sinus') then
+    if (signal.eq.'sinus') then
        solution=sin(4*PI*xt)
        ! solution=sin(xt)
-    else if (a.eq.'creneau') then
+    else if (signal.eq.'creneau') then
        if ((x.lt.0.55).and.(x.gt.0.45)) then
           solution=0.5
        else
           solution=0.0
        end if
-    else if (a.eq.'x') then
+    else if (signal.eq.'x') then
        solution=xt**5
-        else if (a.eq.'flat') then
+        else if (signal.eq.'flat') then
        solution=0.0
     else
        solution=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
@@ -238,12 +236,17 @@ contains
     else
        call init_operator(problem)
     end if
+    
     problem%n_time_step=int(problem%final_time/problem%dt)
     if (problem%n_time_step.le.problem%n_frame) then
-       problem%n_display=1
+       problem%n_display=1 ! to avoid errors
     else
-       problem%n_display=int(problem%n_time_step/problem%n_frame)
+       problem%n_display=int(problem%n_time_step/problem%n_frame)+1
     end if
+
+    problem%n_time_step=problem%n_display*problem%n_frame
+    problem%final_time=problem%dt*problem%n_time_step
+    ! here I change the final time to fit frames of the forward and the backward
     
     allocate(problem%receiver(0:problem%n_time_step/problem%n_display,2))
     if (.not.problem%forward) then
@@ -260,7 +263,9 @@ contains
        end do
        close(10)
        do i=0,size(problem%RHS_backward,1)-1
-          problem%RHS_backward(i,2)=problem%data(i,2)*min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*problem%data(i,1)/problem%final_time))!-problem%RHS_backward(i,2)
+          problem%RHS_backward(i,2)=problem%data(i,2)*                          &
+               min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*   &
+               problem%data(i,1)/problem%final_time))!-problem%RHS_backward(i,2)
        end do
        open(unit=35,file='data_backward.dat')
        do i=0,size(problem%RHS_backward,1)-1
@@ -268,15 +273,16 @@ contains
        end do
     end if
 
-    
     print*,'Ap Av done'
     call init_UP(problem)
     print*,'nb_elem              ::',nb_elem
     print*,'DoF                  ::',DoF
     print*,'total_length         ::',total_length
-    print*,'final_time           ::',final_time
+    print*,'final_time           ::',problem%final_time
     print*,'dx                   ::',problem%dx
     print*,'dt                   ::',problem%dt
+    print*,'n_time_step          ::',problem%n_time_step
+    print*,'n_time_step          ::',problem%n_display
     print*,'Boundary Condition   ::','   ',boundaries
     print*,'Penalisation alpha   ::',alpha
     print*,'Max Iter Power-Method::',k_max
@@ -289,23 +295,6 @@ contains
     end if
     print*,'------------------------------------------------------------'    
   end subroutine init_problem
-
-  
-  subroutine free_problem(problem)
-    type(acoustic_problem),intent(inout) :: problem
-    deallocate(problem%U)
-    deallocate(problem%P)
-    deallocate(problem%density)
-    deallocate(problem%velocity)
-    call free_sparse_matrix(problem%Ap)
-    call free_sparse_matrix(problem%Av)
-    call free_sparse_matrix(problem%Minv_p)
-    call free_sparse_matrix(problem%Minv_v)
-
-    if (problem%boundaries.eq.'ABC') then
-       call free_sparse_matrix(problem%App)
-    end if
-  end subroutine free_problem
 
   
   subroutine init_UP(problem)
@@ -664,8 +653,7 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt/20
-
+    dt=dt/2.0
 
     !****** dt constant *************************
     !****** 100 ***************************
@@ -712,9 +700,8 @@ contains
     integer                                     :: i,j
     integer                                     :: DoF,nb_elem
     
-    DoF=problem%DoF           ! For sake of lisibility
-    nb_elem=problem%nb_elem
-
+    DoF=problem%DoF           ! For sake of readibility
+    nb_elem=problem%nb_elem   ! For sake of readibility
     
     call init_quadrature
     call init_m_loc(m_loc,DoF,problem%bernstein)
@@ -723,7 +710,8 @@ contains
     call init_minv_glob(minv_glob,minv_loc,nb_elem)
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
-    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,problem%forward,problem%receiver_loc)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
+                   problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
     
     Ap_full=0.0
@@ -745,13 +733,13 @@ contains
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
-          
+
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
-       
+
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
-       
+
        call Full2Sparse(matmul(Dp,minv_glob),problem%Minv_p)
        call Full2Sparse(matmul(Dv,minv_glob),problem%Minv_v)
 
@@ -793,7 +781,8 @@ contains
     print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+    print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
+                                                           problem%Ap%nb_ligne**2
   end subroutine init_operator
 
 
@@ -1025,54 +1014,23 @@ contains
           write(25,*) t,eval_RHS(problem%receiver,t,problem%final_time)
        end do
     end if
-   end subroutine all_time_step
+  end subroutine all_time_step
 
- !***************** SORTIE DE RESULTAT *********************************
-  
-  subroutine print_vect(vector,nb_elem,DoF,dx,bernstein,N,name)
-    real,dimension(nb_elem*DoF),intent(in) :: vector
+  subroutine free_problem(problem)
+    type(acoustic_problem),intent(inout) :: problem
+    deallocate(problem%U)
+    deallocate(problem%P)
+    deallocate(problem%density)
+    deallocate(problem%velocity)
+    call free_sparse_matrix(problem%Ap)
+    call free_sparse_matrix(problem%Av)
+    call free_sparse_matrix(problem%Minv_p)
+    call free_sparse_matrix(problem%Minv_v)
 
-    integer                    ,intent(in) :: nb_elem
-    integer                    ,intent(in) :: DoF
-    real                       ,intent(in) :: dx
-    logical                    ,intent(in) :: bernstein
-    integer                    ,intent(in) :: N
-    character(len=*)           ,intent(in) :: name
-    
-    integer :: i,j
-    character(len=20)           :: F_NAME
-    real                        :: x,ddx
-    real,dimension(DoF) :: vector_work
-
-    ddx=dx/(DoF-1)
-    x=0.0
-    
-    write(F_NAME,"(A,A,I0,'.dat')") "fichier/",name,N
-    open(unit=2, file=F_NAME, action="write")
-    if (bernstein) then
-       do i=1,nb_elem-1
-          vector_work=matmul(B2L,vector(Dof*(i-1)+1:Dof*i))
-          do j=1,DoF-1
-             x=(i-1)*dx+(j-1)*ddx
-             write(2,*)x,vector_work(j)
-          end do
-       end do
-       vector_work=matmul(B2L,vector(Dof*(nb_elem-1)+1:Dof*nb_elem))
-       do j=1,DoF
-          x=(nb_elem-1)*dx+(j-1)*ddx
-          write(2,*)x,vector_work(j)
-       end do
-    else
-       do i=1,nb_elem
-          do j=1,DoF
-             x=(i-1)*dx+(j-1)*ddx
-             write(2,*)x,vector((i-1)*DoF+j)
-          end do
-       end do
+    if (problem%boundaries.eq.'ABC') then
+       call free_sparse_matrix(problem%App)
     end if
-    close(2)
-  end subroutine print_vect
-
+  end subroutine free_problem
 
   subroutine print_sol(problem,N)
     type(acoustic_problem),intent(in) :: problem

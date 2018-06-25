@@ -10,18 +10,15 @@ module m_matrix
      integer,dimension(:),allocatable :: JA
   end type sparse_matrix
 
-  public  :: sparse_matrix,                                                    &
-             LU_inv,                                                           &
-             init_sparse_matrix,get_NNN,Full2Sparse,print_sparse_matrix,       &
+  public  :: sparse_matrix,                                                     &
+             LU_inv,                                                            &
+             init_sparse_matrix,get_NNN,Full2Sparse,print_sparse_matrix,        &
              sparse_matmul,is_sym,free_sparse_matrix
 
 contains
 
 
-  !************ INVERSION DIRECTE PETITE MATRICE *******************************
-
-  
-  
+  !************ Matrices Inversion *******************************
   ! Returns the inverse of a matrix calculated by finding the LU
   ! decomposition.  Depends on LAPACK.
   function LU_inv(A)
@@ -63,7 +60,7 @@ contains
   end function LU_inv
 
 
-  !************FUNCTION SPARSE MATRIX ******************************************
+  !************ UNCTION SPARSE MATRIX ******************************************
   subroutine init_sparse_matrix(A,NNN,nb_ligne)
     type(sparse_matrix),intent(inout) :: A
     integer            ,intent(in)    :: NNN
@@ -145,7 +142,7 @@ contains
 
 
 
-  !************ FONCTIONS TESTS ************************************************
+  !************ TEST FUNCTIONS  *************************************************
 
   subroutine print_sparse_matrix(A)
     type(sparse_matrix),intent(in) :: A
