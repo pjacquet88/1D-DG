@@ -20,11 +20,12 @@ program main
   integer         ,parameter :: k_max=1e3
   real            ,parameter :: epsilon=1e-5
   integer         ,parameter :: n_frame=1000
-  integer         ,parameter :: receiver_loc=2
+  integer         ,parameter :: source_loc=1
+  integer         ,parameter :: receiver_loc=3
   logical         ,parameter :: use_data_model=.true.
   
   real,dimension(1)          :: velocity
-  real,dimension(4)          :: density
+  real,dimension(6)          :: density
 
   
   type(acoustic_problem)     :: problem,forward,backward
@@ -33,12 +34,13 @@ program main
   integer                    :: n_display
   real                       :: errorU
   real                       :: errorP
-  real,dimension(:),allocatable :: P,B,Im,PB
+  real,dimension(:),allocatable :: P,B,Im,PB,Im_lap
   integer                       :: nb_frame
 
   !********************** Animation et Sorties ******************************
   logical,parameter          :: animation=.false.
   logical,parameter          :: sortie=.true.
+  logical,parameter          :: RTM=.true.
   !**************************************************************************
 
   integer :: values(1:8), k
@@ -82,7 +84,7 @@ program main
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   call init_problem(forward,nb_elem,DoF,time_order,velocity,density,            &
        total_length,final_time,alpha,bernstein,signal,boundaries,  &
-                    k_max,epsilon,receiver_loc,n_frame,.true.)
+                    k_max,epsilon,source_loc,receiver_loc,n_frame,.true.)
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
 
@@ -90,23 +92,22 @@ program main
      call system('rm data.dat')
      call system('cp receiver.dat data.dat')
   end if
-
-
-
   
   call cpu_time(t1)
-    !------------------------------ Backward ------------------------------------
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%% BACKWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  
-  call init_problem(backward,nb_elem,DoF,time_order,velocity,density,           &
-       total_length,final_time,alpha,bernstein,signal,boundaries,  &
-       k_max,epsilon,receiver_loc,n_frame,.false.)
+  if (RTM) then
+     !------------------------------ Backward ------------------------------------
+     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+     print*,'%%%%%%%%%%%%%%%%%%%%% BACKWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
-  call print_sol(backward,backward%n_frame)
-  
-  call all_time_step(backward,sortie)
+     call init_problem(backward,nb_elem,DoF,time_order,velocity,density,        &
+          total_length,final_time,alpha,bernstein,signal,boundaries,            &
+          k_max,epsilon,source_loc,receiver_loc,n_frame,.false.)
+
+     call print_sol(backward,backward%n_frame)
+
+     call all_time_step(backward,sortie)
+  end if
   call cpu_time(t2)
 
   
@@ -124,12 +125,11 @@ program main
      call system ('eog animate.gif &')
   end if
   
-
-  call error_periodique(problem,t,errorU,errorP)
-
   !------------------------ Free Variables --------------------------------------
   call free_problem(forward)
-  call free_problem(backward)
+  if (RTM) then
+     call free_problem(backward)
+  end if
   call free_basis_b
   call free_basis_l
   call free_B2L
@@ -137,34 +137,43 @@ program main
   call free_derive
 
   !---------------------- RTM Post Process ---------------------------------------
+  if (RTM) then
+     allocate(P(nb_elem*(DoF-1)+1))
+     allocate(B(nb_elem*(DoF-1)+1))
+     allocate(Im(nb_elem*(DoF-1)+1))
+     allocate(Im_lap(nb_elem*(DoF-1)+1))
 
-  allocate(P(nb_elem*DoF))
-  allocate(B(nb_elem*DoF))
-  allocate(Im(nb_elem*DoF))
+     Im=0.0
 
-  Im=0.0
-
-  do i=0,n_frame
-     call load(P,'P',i)
-     call load(B,'B',i)
-     do k=1,nb_elem*DoF
-        Im(k)=Im(k)+P(k)*B(k)
+     do i=0,n_frame
+        call load(P,'P',i)
+        call load(B,'B',i)
+        do k=1,nb_elem*(DoF-1)+1
+           Im(k)=Im(k)+P(k)*B(k)
+        end do
+        !     call print_vect(Im,nb_elem,DoF,total_length/nb_elem,.false.,i,'I')
      end do
-!     call print_vect(Im,nb_elem,DoF,total_length/nb_elem,.false.,i,'I')
-  end do
 
-  open(unit=33,file='RTM.dat')
-  do i=1,nb_elem*DoF
-     write(33,*) real(i)/(nb_elem*DoF),Im(i)
-  end do
+     Im_lap=laplace_filter(Im)
+     open(unit=33,file='RTM.dat')
+     open(unit=34,file='RTM_Lap.dat')
+     do i=1,nb_elem*(DoF-1)+1
+        !     write(33,*) real(i)/(nb_elem*DoF),Im(i)
 
-  deallocate(P)
-  deallocate(B)
-  deallocate(Im)
-  
-  call system('gnuplot RTM.script')
-  call system('eog RTM.png &')
-  print*,'%%%%%%%%%%% END RTM %%%%%%%%%%%%%%%%%%%%%%'
+        write(33,*) real(i)/(nb_elem*(DoF-1)+1),Im(i)
+        write(34,*) real(i)/(nb_elem*(DoF-1)+1),Im_lap(i)
+     end do
+
+     deallocate(P)
+     deallocate(B)
+     deallocate(Im)
+     deallocate(Im_lap)
+
+     call system('gnuplot RTM.script')
+     call system('eog RTM.png &')
+     call system('eog RTM_Lap.png &')
+  end if
+  print*,'%%%%%%%%%%% END PROGRAM %%%%%%%%%%%%%%%%%%%%%%'
   print*,'Total time = ',t2-t0,'s'
   print*,'Forward time = ',t1-t0,'s'
   print*,'Backward time = ',t2-t1,'s'

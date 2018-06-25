@@ -26,7 +26,8 @@ module m_acoustic
      type(sparse_matrix)             :: Ap,App
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
-     !----------- RECEIVER ---------------------------
+     !----------- SOURCE & RECEIVER ---------------------------
+     integer                         :: source_loc   ! beginning of an element
      integer                         :: receiver_loc ! beginning of an element
      real,dimension(:,:),allocatable :: receiver
      real,dimension(:,:),allocatable :: data
@@ -151,7 +152,8 @@ contains
 
   subroutine init_problem(problem,nb_elem,DoF,time_order,velocity,density,      &
                           total_length,final_time,alpha,bernstein,signal,       &
-                          boundaries,k_max,epsilon,receiver_loc,n_frame,forward)
+                          boundaries,k_max,epsilon,source_loc,receiver_loc,     &
+                          n_frame,forward)
     
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
@@ -167,6 +169,7 @@ contains
     character(len=*)      ,intent(in)  :: boundaries
     integer               ,intent(in)  :: k_max
     real                  ,intent(in)  :: epsilon
+    integer               ,intent(in)  :: source_loc
     integer               ,intent(in)  :: receiver_loc
     integer               ,intent(in)  :: n_frame
     logical               ,intent(in)  :: forward
@@ -188,6 +191,7 @@ contains
     problem%epsilon=epsilon
     problem%signal=signal
     problem%receiver_loc=receiver_loc
+    problem%source_loc=source_loc
     problem%n_frame=n_frame
     problem%forward=forward
 
@@ -256,9 +260,15 @@ contains
        end do
        close(10)
        do i=0,size(problem%RHS_backward,1)-1
-          problem%RHS_backward(i,2)=problem%data(i,2)!-problem%RHS_backward(i,2)
+          problem%RHS_backward(i,2)=problem%data(i,2)*min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*problem%data(i,1)/problem%final_time))!-problem%RHS_backward(i,2)
+       end do
+       open(unit=35,file='data_backward.dat')
+       do i=0,size(problem%RHS_backward,1)-1
+          write(35,*) problem%RHS_backward(i,1),problem%RHS_backward(i,2)
        end do
     end if
+
+    
     print*,'Ap Av done'
     call init_UP(problem)
     print*,'nb_elem              ::',nb_elem
@@ -391,45 +401,53 @@ contains
     
   end subroutine init_minv_glob
 
-  subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity,density,dx,dt)
+  subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity_beg,   &
+                                velocity_end,dx,dt)
     real,dimension(:,:),intent(out) :: minv_glob_abc
     real,dimension(:,:),intent(in)  :: m_loc
     integer            ,intent(in)  :: nb_elem
     integer            ,intent(in)  :: DoF
-    real               ,intent(in)  :: velocity
-    real               ,intent(in)  :: density
+    real               ,intent(in)  :: velocity_beg
+    real               ,intent(in)  :: velocity_end
     real               ,intent(in)  :: dx
     real               ,intent(in)  :: dt
 
     integer                         :: i
-    real,dimension(DoF,DoF)         :: m_loc_abc,minv_loc,minv_loc_abc
+    real,dimension(DoF,DoF)         :: m_loc_abc1,m_loc_abc2
+    real,dimension(DoF,DoF)         :: minv_loc,minv_loc_abc1,minv_loc_abc2
 
-    m_loc_abc=m_loc
-    m_loc_abc(DoF,DoF)=m_loc_abc(DoF,DoF)+0.5*velocity*dt/dx
+    m_loc_abc1=m_loc
+    m_loc_abc2=m_loc
+    m_loc_abc2(DoF,DoF)=m_loc_abc2(DoF,DoF)+0.5*velocity_end*dt/dx
+    m_loc_abc1(1,1)=m_loc_abc1(1,1)+0.5*velocity_beg*dt/dx
 
     minv_loc=LU_inv(m_loc)
-    minv_loc_abc=LU_inv(m_loc_abc)
+    minv_loc_abc1=LU_inv(m_loc_abc1)
+    minv_loc_abc2=LU_inv(m_loc_abc2)
     
     minv_glob_abc=0.0
-    do i=1,nb_elem-1
+    minv_glob_abc(1:DoF,1:DoF)=minv_loc_abc1
+    do i=2,nb_elem-1
        minv_glob_abc(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=minv_loc
     end do
     minv_glob_abc(DoF*(nb_elem-1)+1:DoF*nb_elem,DoF*(nb_elem-1)+1:DoF*nb_elem)  &
-         =minv_loc_abc
+         =minv_loc_abc2
   end subroutine init_minv_glob_abc
 
-  subroutine init_mabs(mabs,nb_elem,DoF,velocity,density,dx,dt)
+  subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt)
     real,dimension(:,:),intent(out) :: mabs
     integer            ,intent(in)  :: nb_elem
     integer            ,intent(in)  :: DoF
-    real               ,intent(in)  :: velocity
-    real               ,intent(in)  :: density
+    real               ,intent(in)  :: velocity_beg
+    real               ,intent(in)  :: velocity_end
     real               ,intent(in)  :: dx
     real               ,intent(in)  :: dt
 
+    integer :: i
+    
     mabs=0.0
-    mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity*dt/dx
-    !mabs(1,1)=-0.5*velocity*dt/dx
+    mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity_end*dt/dx
+    mabs(1,1)=0.5*velocity_beg*dt/dx
   end subroutine init_mabs
 
     
@@ -556,7 +574,7 @@ contains
 
        alpha_dummy=alpha
 
-       Fv(1,1)=(1.0+2.0*alpha_dummy)
+       Fv(1,1)=0.0!(1.0+2.0*alpha_dummy)
        Fv(1,DoF*nb_elem)=0.0
 
        Fv(Dof*nb_elem,Dof*nb_elem)=0.0!-1.0-2.0*alpha_dummy
@@ -569,7 +587,8 @@ contains
        
        alpha_dummy=-alpha
 
-       Fp(1,1)=0.0
+!       Fp(1,1)=1.0
+       Fp(1,1)=1.0
        Fp(1,DoF*nb_elem)=0.0
 
        Fp(Dof*nb_elem,Dof*nb_elem)=-1.0!*2
@@ -645,16 +664,16 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt/10
+    dt=dt/20
 
 
     !****** dt constant *************************
     !****** 100 ***************************
-    ! dt= 4.16666589E-04*alpha   !ordre  1 
+    ! dt= 4.16666589E-04*alpha  !ordre  1 
     ! dt= 2.08152022E-04*alpha  !ordre  2
     ! dt= 1.24648141E-04*alpha  !ordre  3
     ! dt= 8.29414494E-05*alpha  !ordre  4
-    !  dt= 5.91463395E-05*alpha  !ordre  5
+    ! dt= 5.91463395E-05*alpha  !ordre  5
     ! dt= 4.42988749E-05*alpha  !ordre  6
     ! dt= 3.44150467E-05*alpha  !ordre  7
     ! dt= 2.75054135E-05*alpha  !ordre  8
@@ -800,7 +819,8 @@ contains
     call init_minv_glob(minv_glob,minv_loc,nb_elem)
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
-    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,problem%forward,problem%receiver_loc)
+    call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
+                   problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
 
     Ap_full=0.0
@@ -816,11 +836,11 @@ contains
             problem%k_max,problem%epsilon,problem%nb_elem,problem%time_order)
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
-                               problem%velocity(nb_elem),                       &
-                               problem%density(nb_elem),problem%dx,problem%dt)
-       call init_mabs(mabs,nb_elem,DoF,                         &
-                              problem%velocity(nb_elem),                        &
-                              problem%density(nb_elem),problem%dx,problem%dt)
+                               problem%velocity(1),problem%velocity(nb_elem),   &
+                               problem%dx,problem%dt)
+       call init_mabs(mabs,nb_elem,DoF,                                         &
+                      problem%velocity(1),problem%velocity(nb_elem),            &
+                      problem%dx,problem%dt)
        
        Ap_full=matmul(m_glob,s_glob)+Fp
        Ap_full=matmul(minv_glob_abc,Ap_full)
@@ -918,7 +938,7 @@ contains
     last_node=problem%DoF*problem%nb_elem
     RHSp=0.0
     RHSv=0.0
-    f0=3.0
+    f0=2.5
 
     if (problem%boundaries.eq.'dirichlet') then
        gg=min(0.5*t,0.5)
@@ -936,7 +956,7 @@ contains
     if (problem%boundaries.eq.'ABC') then
        if (problem%forward) then
           gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          RHSv(problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
          ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0+2.0*problem%alpha)
        else
           gg=eval_RHS(problem%RHS_backward,t,problem%final_time)
@@ -1026,16 +1046,21 @@ contains
 
     ddx=dx/(DoF-1)
     x=0.0
-
+    
     write(F_NAME,"(A,A,I0,'.dat')") "fichier/",name,N
     open(unit=2, file=F_NAME, action="write")
     if (bernstein) then
-       do i=1,nb_elem
+       do i=1,nb_elem-1
           vector_work=matmul(B2L,vector(Dof*(i-1)+1:Dof*i))
-          do j=1,DoF
+          do j=1,DoF-1
              x=(i-1)*dx+(j-1)*ddx
              write(2,*)x,vector_work(j)
           end do
+       end do
+       vector_work=matmul(B2L,vector(Dof*(nb_elem-1)+1:Dof*nb_elem))
+       do j=1,DoF
+          x=(nb_elem-1)*dx+(j-1)*ddx
+          write(2,*)x,vector_work(j)
        end do
     else
        do i=1,nb_elem
@@ -1105,7 +1130,7 @@ contains
           end do
           
           U_ex((i-1)*DoF+j)=solution(x,0.0,problem%signal)
-          P_ex((i-1)*DoF+j)=solution(x,-problem%dt/2,problem%signal)
+          P_ex((i-1)*DoF+j)=solution(x,-problem%dt,problem%signal)
        end do
     end do
 

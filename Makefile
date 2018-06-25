@@ -12,7 +12,7 @@ all: run
 	$(FC) $(CFLAGS) -c $<
 #	mv $@ .obj
 
-run:   load_function.o m_matrix.o m_powermethod.o m_polynom.o m_acoustic.o main.o
+run:   m_matrix.o load_function.o  m_powermethod.o m_polynom.o m_acoustic.o main.o
 	$(FC) $(CFLAGS) $^ -o $@  $(LDFLAG)
 
 clean:
