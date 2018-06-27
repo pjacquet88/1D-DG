@@ -22,7 +22,7 @@ program main
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
   
   real,dimension(1)          :: velocity ! velocity model change the size to change the model 
-  real,dimension(3)          :: density  ! density model change the size to change the model
+  real,dimension(1)          :: density  ! density model change the size to change the model
   !******************************************************************************
 
 
@@ -42,6 +42,7 @@ program main
   integer                           :: values(1:8), k
   integer,dimension(:), allocatable :: seed
   real                              :: t0,t1,t2
+  logical                           :: file_exists
   !******************************************************************************
   
   call date_and_time(values=values)
@@ -86,9 +87,15 @@ program main
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
 
+  
   if (use_data_model) then
-     call system('rm data.dat')
-     call system('cp receiver.dat data.dat')
+     INQUIRE(FILE="data.dat", EXIST=file_exists)
+     if (file_exists) then
+        call system('rm data.dat')
+        call system('cp receiver.dat data.dat')
+     else
+        call system('cp receiver.dat data.dat')
+     end if
   end if
   
   call cpu_time(t1)
