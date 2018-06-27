@@ -4,8 +4,7 @@ To compile : "make"
 To clean : "make clean"
 To execute : "./run"
 
-You need to: -create an empty folder called 'Files' at the source code root ($ mkdir Files)
-             -have a recent version of gnuplot to create and see the animation automatically created ($ sudo apt install gnuplot)
+You need to:  -have a recent version of gnuplot to create and see the animation automatically created ($ sudo apt install gnuplot)
              -check your Blas/Lapack library location in the Makefile
             
             
