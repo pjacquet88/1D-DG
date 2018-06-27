@@ -25,7 +25,7 @@ contains
     character(len=50)              :: fichier
 
     U=0.0
-    write(fichier,"(A,A,I0,'.dat')") "../Bernstein/fichier/",char,N
+    write(fichier,"(A,A,I0,'.dat')") "../Bernstein/Files/",char,N
     
     open(unit=456,file=fichier, form="formatted",action='read')
     do i=1,size(U)
@@ -68,7 +68,7 @@ contains
     ddx=dx/(DoF-1)
     x=0.0
     
-    write(F_NAME,"(A,A,I0,'.dat')") "fichier/",name,N
+    write(F_NAME,"(A,A,I0,'.dat')") "Files/",name,N
     open(unit=2, file=F_NAME, action="write")
     if (bernstein) then
        do i=1,nb_elem-1

@@ -10,7 +10,7 @@ program main
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   integer         ,parameter :: time_order=2         ! time order 2 or 4 (Leap Frog)
   real            ,parameter :: total_length=2.0     ! domain length
-  real            ,parameter :: final_time=10.0      ! final time
+  real            ,parameter :: final_time=5.0      ! final time
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
@@ -20,17 +20,17 @@ program main
   integer         ,parameter :: n_frame=1000         ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
-  logical         ,parameter :: use_data_model=.true.! if T, data = forward receiver
   
-  real,dimension(1)          :: velocity             ! velocity model
-  real,dimension(6)          :: density              ! density model
+  real,dimension(1)          :: velocity ! velocity model change the size to change the model 
+  real,dimension(3)          :: density  ! density model change the size to change the model
   !******************************************************************************
 
 
   !**************** Animation and Outputs ***************************************
   logical,parameter          :: animation=.true.
-  logical,parameter          :: sortie=.true.
-  logical,parameter          :: RTM=.true.
+  logical,parameter          :: sortie=.true. ! animation an RTM not working if F
+  logical,parameter          :: RTM=.false.    ! if F -> just forward
+  logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
   !******************************************************************************
 
 
@@ -123,9 +123,9 @@ program main
   end if
   
   !------------------------ Free Variables --------------------------------------
-  call free_problem(forward)
+  call free_acoustic_problem(forward)
   if (RTM) then
-     call free_problem(backward)
+     call free_acoustic_problem(backward)
   end if
   call free_basis_b
   call free_basis_l

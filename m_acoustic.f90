@@ -22,7 +22,7 @@ module m_acoustic
      character(len=20)               :: boundaries   ! string for BC
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
-     real                            :: epsilon      ! precition for power method algo.
+     real                            :: epsilon      ! precision for power method algo.
      !----------- MATRICES ---------------------------
      type(sparse_matrix)             :: Ap,App       
      type(sparse_matrix)             :: Av
@@ -43,7 +43,7 @@ module m_acoustic
   real,parameter :: PI=acos(-1.0)
 
   public  :: init_problem,init_operator,all_time_step,                          &
-             free_problem,                                                      &
+             free_acoustic_problem,                                             &
              print_sol,error_periodique
 
   private :: xx,weight,solution,PI,                                             &
@@ -132,7 +132,7 @@ contains
     if (signal.eq.'sinus') then
        solution=sin(4*PI*xt)
        ! solution=sin(xt)
-    else if (signal.eq.'creneau') then
+    else if (signal.eq.'boxcar') then
        if ((x.lt.0.55).and.(x.gt.0.45)) then
           solution=0.5
        else
@@ -950,7 +950,7 @@ contains
        else
           gg=eval_RHS(problem%RHS_backward,t,problem%final_time)
           ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
-          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-2.0*problem%alpha)
+          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
        end if
           
           RHSv=sparse_matmul(problem%Minv_v,RHSv)
@@ -1016,7 +1016,7 @@ contains
     end if
   end subroutine all_time_step
 
-  subroutine free_problem(problem)
+  subroutine free_acoustic_problem(problem)
     type(acoustic_problem),intent(inout) :: problem
     deallocate(problem%U)
     deallocate(problem%P)
@@ -1030,7 +1030,7 @@ contains
     if (problem%boundaries.eq.'ABC') then
        call free_sparse_matrix(problem%App)
     end if
-  end subroutine free_problem
+  end subroutine free_acoustic_problem
 
   subroutine print_sol(problem,N)
     type(acoustic_problem),intent(in) :: problem
