@@ -8,7 +8,7 @@ module m_acoustic
   type acoustic_problem
      integer                         :: DoF          ! nb of degree of freedom 
      integer                         :: nb_elem      ! nb of elements
-     integer                         :: time_order   ! time order 2 or 4 (LF)
+     character(len=20)               :: time_scheme  ! the used time scheme
      logical                         :: bernstein    ! bool for bernstein elmnts
      real,dimension(:) ,allocatable  :: density      ! density model
      real,dimension(:) ,allocatable  :: velocity     ! velocity model
@@ -148,7 +148,7 @@ contains
   end function solution
 
 
-  subroutine init_problem(problem,nb_elem,DoF,time_order,velocity,density,      &
+  subroutine init_problem(problem,nb_elem,DoF,time_scheme,velocity,density,      &
                           total_length,final_time,alpha,bernstein,signal,       &
                           boundaries,k_max,epsilon,source_loc,receiver_loc,     &
                           n_frame,forward)
@@ -158,7 +158,7 @@ contains
     integer               ,intent(in)  :: DoF
     real,dimension(:)     ,intent(in)  :: velocity
     real,dimension(:)     ,intent(in)  :: density
-    integer               ,intent(in)  :: time_order
+    character(len=*)      ,intent(in)  :: time_scheme
     real                  ,intent(in)  :: total_length
     real                  ,intent(in)  :: final_time
     real                  ,intent(in)  :: alpha
@@ -177,7 +177,7 @@ contains
     real    :: gd,dd
 
     problem%DoF=DoF
-    problem%time_order=time_order
+    problem%time_scheme=time_scheme
     problem%nb_elem=nb_elem
     problem%total_length=total_length
     problem%dx=total_length/(nb_elem)
@@ -284,6 +284,7 @@ contains
     print*,'n_time_step          ::',problem%n_time_step
     print*,'n_time_step          ::',problem%n_display
     print*,'Boundary Condition   ::','   ',boundaries
+    print*,'Time scheme         ::' ,'   ',time_scheme
     print*,'Penalisation alpha   ::',alpha
     print*,'Max Iter Power-Method::',k_max
     print*,'Epsilon Power-Method ::',epsilon
@@ -300,16 +301,23 @@ contains
   subroutine init_UP(problem)
     type(acoustic_problem),intent(inout) :: problem
     integer                              :: i,j,DoF
-    real    :: x,ddx
+    real    :: x,ddx,dephasing
     
     DoF=problem%DoF
     ddx=problem%dx/(DoF-1)
     x=0.0
+
+    if ((problem%time_scheme.eq.'LF').or.(problem%time_scheme.eq.'LF4')) then
+       dephasing=-problem%dt/2.0
+    else
+       dephasing=0.0
+    end if
+
     do i=1,problem%nb_elem
        do j=1,DoF
           x=(i-1)*problem%dx+(j-1)*ddx
           problem%U((i-1)*problem%DoF+j)=solution(x,0.0,problem%signal)
-          problem%P((i-1)*problem%DoF+j)=solution(x,-problem%dt/2,problem%signal)
+          problem%P((i-1)*problem%DoF+j)=solution(x,dephasing,problem%signal)
        end do
     end do
 
@@ -391,7 +399,7 @@ contains
   end subroutine init_minv_glob
 
   subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity_beg,   &
-                                velocity_end,dx,dt)
+                                velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: minv_glob_abc
     real,dimension(:,:),intent(in)  :: m_loc
     integer            ,intent(in)  :: nb_elem
@@ -400,16 +408,20 @@ contains
     real               ,intent(in)  :: velocity_end
     real               ,intent(in)  :: dx
     real               ,intent(in)  :: dt
-
+    character(len=*)   ,intent(in)  :: time_scheme
+    
     integer                         :: i
     real,dimension(DoF,DoF)         :: m_loc_abc1,m_loc_abc2
     real,dimension(DoF,DoF)         :: minv_loc,minv_loc_abc1,minv_loc_abc2
 
     m_loc_abc1=m_loc
     m_loc_abc2=m_loc
-    m_loc_abc2(DoF,DoF)=m_loc_abc2(DoF,DoF)+0.5*velocity_end*dt/dx
-    m_loc_abc1(1,1)=m_loc_abc1(1,1)+0.5*velocity_beg*dt/dx
-
+    
+    if (time_scheme.eq.'LF') then
+       m_loc_abc2(DoF,DoF)=m_loc_abc2(DoF,DoF)+0.5*velocity_end*dt/dx
+       m_loc_abc1(1,1)=m_loc_abc1(1,1)+0.5*velocity_beg*dt/dx
+    end if
+    
     minv_loc=LU_inv(m_loc)
     minv_loc_abc1=LU_inv(m_loc_abc1)
     minv_loc_abc2=LU_inv(m_loc_abc2)
@@ -423,7 +435,7 @@ contains
          =minv_loc_abc2
   end subroutine init_minv_glob_abc
 
-  subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt)
+  subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: mabs
     integer            ,intent(in)  :: nb_elem
     integer            ,intent(in)  :: DoF
@@ -431,12 +443,19 @@ contains
     real               ,intent(in)  :: velocity_end
     real               ,intent(in)  :: dx
     real               ,intent(in)  :: dt
+    character(len=*)   ,intent(in)  :: time_scheme
 
     integer :: i
     
     mabs=0.0
-    mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity_end*dt/dx
-    mabs(1,1)=0.5*velocity_beg*dt/dx
+    
+    if (time_scheme.eq.'LF') then    
+       mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity_end*dt/dx
+       mabs(1,1)=0.5*velocity_beg*dt/dx
+    else
+       mabs(DoF*nb_elem,DoF*nb_elem)=velocity_end*dt/dx
+       mabs(1,1)=velocity_beg*dt/dx
+    end if
   end subroutine init_mabs
 
     
@@ -624,14 +643,14 @@ contains
   end subroutine init_DpDv
 
 
-  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_order)
+  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
     real               ,intent(out) :: dt
     integer            ,intent(in)  :: k_max
     real               ,intent(in)  :: epsilon
     integer            ,intent(in)  :: nb_elem
-    integer            ,intent(in)  :: time_order
+    character(len=*)   ,intent(in)  :: time_scheme
     type(sparse_matrix)             :: sparse_A
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
@@ -640,10 +659,7 @@ contains
     real                            :: cfl
 
     A=matmul(Ap,Av)
-    ! do i=1,size(A,1)
-    !    write(789,*) A(i,:)
-    ! end do
-    
+
     call Full2Sparse(A,sparse_A)
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=alpha/(sqrt(abs(max_value)))
@@ -653,40 +669,14 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt/2.0
+    dt=dt*1.5   !CFL for LF
 
-    !****** dt constant *************************
-    !****** 100 ***************************
-    ! dt= 4.16666589E-04*alpha  !ordre  1 
-    ! dt= 2.08152022E-04*alpha  !ordre  2
-    ! dt= 1.24648141E-04*alpha  !ordre  3
-    ! dt= 8.29414494E-05*alpha  !ordre  4
-    ! dt= 5.91463395E-05*alpha  !ordre  5
-    ! dt= 4.42988749E-05*alpha  !ordre  6
-    ! dt= 3.44150467E-05*alpha  !ordre  7
-    ! dt= 2.75054135E-05*alpha  !ordre  8
-    ! dt= 2.24858413E-05*alpha  !ordre  9
-    ! dt= 1.87254609E-05*alpha  !ordre  10
+    if (time_scheme.eq.'LF4') then
+       dt=2.7*dt
+    else if (time_scheme.eq.'RK4') then
+       dt=1.4*dt
+    end if
 
-    !****** 500 ****************************
-    ! dt= 1.65833015E-04        !ordre  1 
-    ! dt= 8.28442862E-05        !ordre  2
-    ! dt= 4.96104076E-05        !ordre  3
-    ! dt= 8.29414494E-05*alpha  !ordre  4
-    ! dt= 5.91463395E-05*alpha  !ordre  5
-    ! dt= 4.42988749E-05*alpha  !ordre  6
-    ! dt= 3.44150467E-05*alpha  !ordre  7
-    ! dt= 2.75054135E-05*alpha  !ordre  8
-    ! dt= 2.24858413E-05*alpha  !ordre  9
-    ! dt= 1.87254609E-05*alpha  !ordre  10
-     !*********************************************
-
-     !************** cfl constante ****************
-     ! cfl=0.95*dt*100 ! cfl=dt/h
-     ! if (time_order.eq.4) then
-     !    cfl=cfl*2.7
-     ! end if
-     ! dt=cfl/(nb_elem)
   end subroutine init_dt
   
 
@@ -726,9 +716,9 @@ contains
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
             problem%k_max,problem%epsilon,problem%nb_elem,             &
-            problem%time_order)
+            problem%time_scheme)
 
-       if (problem%time_order.eq.4) then
+       if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
@@ -757,9 +747,9 @@ contains
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_order)
+                     problem%time_scheme)
 
-       if (problem%time_order.eq.4) then
+       if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
@@ -822,23 +812,27 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
-            problem%k_max,problem%epsilon,problem%nb_elem,problem%time_order)
+            problem%k_max,problem%epsilon,problem%nb_elem,problem%time_scheme)
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
                                problem%velocity(1),problem%velocity(nb_elem),   &
-                               problem%dx,problem%dt)
+                               problem%dx,problem%dt,problem%time_scheme)
        call init_mabs(mabs,nb_elem,DoF,                                         &
                       problem%velocity(1),problem%velocity(nb_elem),            &
-                      problem%dx,problem%dt)
+                      problem%dx,problem%dt,problem%time_scheme)
        
        Ap_full=matmul(m_glob,s_glob)+Fp
        Ap_full=matmul(minv_glob_abc,Ap_full)
        Ap_full=matmul(Dp,Ap_full)
-      
-       App_full=mabs-m_glob
+
+       if (problem%time_scheme.eq.'LF') then
+          App_full=mabs-m_glob
+       else
+          App_full=mabs
+       end if
        App_full=matmul(minv_glob_abc,App_full)
 
-       if (problem%time_order.eq.4) then
+       if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
@@ -867,26 +861,29 @@ contains
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_order)
+                     problem%time_scheme)
 
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
-                               problem%velocity(nb_elem),                       &
-                               problem%density(nb_elem),problem%dx,problem%dt)
-       call init_mabs(mabs,nb_elem,DoF,                         &
-                              problem%velocity(nb_elem),                        &
-                              problem%density(nb_elem),problem%dx,problem%dt)
+                               problem%velocity(1),problem%velocity(nb_elem),   &
+                               problem%dx,problem%dt,problem%time_scheme)
+       call init_mabs(mabs,nb_elem,DoF,problem%velocity(1),                     &
+                      problem%velocity(nb_elem),problem%dx,problem%dt,          &
+                      problem%time_scheme)
        
        Ap_full=s_glob+Fp
        
        Ap_full=matmul(minv_glob_abc,Ap_full)
        Ap_full=matmul(Dp,Ap_full)
        
-       
-       App_full=mabs-m_glob
+       if (problem%time_scheme.eq.'LF') then
+          App_full=mabs-m_glob
+       else
+          App_full=mabs
+       end if
        App_full=matmul(minv_glob_abc,App_full)
 
-       if (problem%time_order.eq.4) then
+       if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
@@ -920,6 +917,8 @@ contains
     real,                  intent(in)    :: t
 
     real,dimension(problem%DoF*problem%nb_elem) :: RHSv,RHSp
+    real,dimension(problem%DoF*problem%nb_elem) :: U1,U2,U3,U4
+    real,dimension(problem%DoF*problem%nb_elem) :: P1,P2,P3,P4
     real                                        :: gd,gg
     real                                        :: f0
     integer                                     :: last_node,i
@@ -940,30 +939,72 @@ contains
 
        RHSv=sparse_matmul(problem%Minv_v,RHSv)
        RHSp=sparse_matmul(problem%Minv_p,RHSp)
-
     end if
+    
     if (problem%boundaries.eq.'ABC') then
        if (problem%forward) then
           gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
           RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
-         ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0+2.0*problem%alpha)
+          ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0+2.0*problem%alpha)
        else
           gg=eval_RHS(problem%RHS_backward,t,problem%final_time)
           ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
           RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
        end if
-          
-          RHSv=sparse_matmul(problem%Minv_v,RHSv)
-          RHSp=sparse_matmul(problem%Minv_p,RHSp)
 
+       RHSv=sparse_matmul(problem%Minv_v,RHSv)
+       RHSp=sparse_matmul(problem%Minv_p,RHSp)
     end if
-    
-    problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
-    if (problem%boundaries.eq.'ABC') then
-       problem%P=-sparse_matmul(problem%Ap,problem%U)-                          &
-                  sparse_matmul(problem%App,problem%P)-RHSp
-    else
-       problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
+
+    if ((problem%time_scheme.eq.'LF').or.(problem%time_scheme.eq.'LF4')) then
+
+       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
+       if (problem%boundaries.eq.'ABC') then
+          problem%P=-sparse_matmul(problem%Ap,problem%U)-                          &
+               sparse_matmul(problem%App,problem%P)-RHSp
+       else
+          problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
+       end if
+
+    else if (problem%time_scheme.eq.'RK4') then
+       
+       U1=-sparse_matmul(problem%Av,problem%P)-RHSv
+
+       if (problem%boundaries.eq.'ABC') then
+          P1=-sparse_matmul(problem%Ap,problem%U)-                       &
+               sparse_matmul(problem%App,problem%P)-RHSp
+       else
+          P1=-sparse_matmul(problem%Ap,problem%U)-RHSp
+       end if
+
+
+       U2=-sparse_matmul(problem%Av,problem%P+0.5*P1)-RHSv
+       if (problem%boundaries.eq.'ABC') then
+          P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-                       &
+               sparse_matmul(problem%App,problem%P+0.5*P1)-RHSp
+       else
+          P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-RHSp
+       end if
+
+
+       U3=-sparse_matmul(problem%Av,problem%P+0.5*P2)-RHSv
+       if (problem%boundaries.eq.'ABC') then
+          P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-                       &
+               sparse_matmul(problem%App,problem%P+0.5*P2)-RHSp
+       else
+          P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-RHSp
+       end if
+
+       U4=-sparse_matmul(problem%Av,problem%P+P3)-RHSv
+       if (problem%boundaries.eq.'ABC') then
+          P4=-sparse_matmul(problem%Ap,problem%U+U3)-                       &
+               sparse_matmul(problem%App,problem%P+P3)-RHSp
+       else
+          P4=-sparse_matmul(problem%Ap,problem%U+U3)-RHSp
+       end if
+
+       problem%U=problem%U+(1.0/6.0)*(U1+2*U2+2*U3+U4)
+       problem%P=problem%P+(1.0/6.0)*(P1+2*P2+2*P3+P4)
     end if
   end subroutine one_time_step
 

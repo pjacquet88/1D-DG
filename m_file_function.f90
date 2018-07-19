@@ -84,12 +84,17 @@ contains
           write(2,*)x,vector_work(j)
        end do
     else
-       do i=1,nb_elem
-          do j=1,DoF
+       do i=1,nb_elem-1
+          do j=1,DoF-1
              x=(i-1)*dx+(j-1)*ddx
              write(2,*)x,vector((i-1)*DoF+j)
           end do
        end do
+       do j=1,DoF
+          x=(nb_elem-1)*dx+(j-1)*ddx
+          write(2,*)x,vector((nb_elem-1)*DoF+j)
+       end do
+
     end if
     close(2)
   end subroutine print_vect

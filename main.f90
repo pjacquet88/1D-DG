@@ -8,9 +8,9 @@ program main
   !*************** Problem Parameters *******************************************
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
-  integer         ,parameter :: time_order=2         ! time order 2 or 4 (Leap Frog)
   real            ,parameter :: total_length=2.0     ! domain length
-  real            ,parameter :: final_time=5.0      ! final time
+  real            ,parameter :: final_time=5.0       ! final time
+  character(len=*),parameter :: time_scheme='RK4'     ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
@@ -22,14 +22,14 @@ program main
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
   
   real,dimension(1)          :: velocity ! velocity model change the size to change the model 
-  real,dimension(1)          :: density  ! density model change the size to change the model
+  real,dimension(2)          :: density  ! density model change the size to change the model
   !******************************************************************************
 
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.true.
+  logical,parameter          :: animation=.false.
   logical,parameter          :: sortie=.true. ! animation an RTM not working if F
-  logical,parameter          :: RTM=.false.    ! if F -> just forward
+  logical,parameter          :: RTM=.true.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
   !******************************************************************************
 
@@ -81,7 +81,7 @@ program main
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%% FORWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  call init_problem(forward,nb_elem,DoF,time_order,velocity,density,            &
+  call init_problem(forward,nb_elem,DoF,time_scheme,velocity,density,            &
                     total_length,final_time,alpha,bernstein,signal,boundaries,  &
                     k_max,epsilon,source_loc,receiver_loc,n_frame,.true.)
   call print_sol(forward,0)
@@ -106,7 +106,7 @@ program main
      print*,'%%%%%%%%%%%%%%%%%%%%% BACKWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
      print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
-     call init_problem(backward,nb_elem,DoF,time_order,velocity,density,        &
+     call init_problem(backward,nb_elem,DoF,time_scheme,velocity,density,        &
           total_length,final_time,alpha,bernstein,signal,boundaries,            &
           k_max,epsilon,source_loc,receiver_loc,n_frame,.false.)
      call print_sol(backward,backward%n_frame)
