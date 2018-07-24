@@ -19,6 +19,8 @@ module m_acoustic
      real                            :: alpha        ! penalisation value
      real,dimension(:),allocatable   :: U            ! velocity unknowns vector
      real,dimension(:),allocatable   :: P            ! pressure unknowns vector
+     real,dimension(:),allocatable   :: FP1,FP2,FP3  ! AB3 vectors
+     real,dimension(:),allocatable   :: FU1,FU2,FU3  ! AB3 vectors
      character(len=20)               :: boundaries   ! string for BC
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
@@ -28,15 +30,15 @@ module m_acoustic
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
      !----------- SOURCE & RECEIVER ---------------------------
-     integer                         :: source_loc   ! beginning of an element
-     integer                         :: receiver_loc ! beginning of an element
-     real,dimension(:,:),allocatable :: receiver     ! vector describing receivers values as a function of time
-     real,dimension(:,:),allocatable :: data         ! vector describing real datas values as a function of time
-     real,dimension(:,:),allocatable :: RHS_backward ! what we inject in the backward
-     integer                         :: n_time_step  ! nb of time step
-     integer                         :: n_display    ! nb of time step between each saves
-     integer                         :: n_frame      ! nb of time where the sol. is saved
-     logical                         :: forward      ! T=forward of F=backward
+     integer                         :: source_loc    ! beginning of an element
+     integer                         :: receiver_loc  ! beginning of an element
+     real,dimension(:,:),allocatable :: receiver      ! vector describing receivers values as a function of time
+     real,dimension(:,:),allocatable :: data          ! vector describing real datas values as a function of time
+     real,dimension(:,:),allocatable :: receiver_signal ! what we inject in the backward
+     integer                         :: n_time_step   ! nb of time step
+     integer                         :: n_display     ! nb of time step between each saves
+     integer                         :: n_frame       ! nb of time where the sol. is saved
+     logical                         :: forward       ! T=forward of F=backward
   end type acoustic_problem
   
   real,dimension(15)                 :: xx,weight
@@ -49,7 +51,7 @@ module m_acoustic
   private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
-             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_RHS,one_time_step
+             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_signal,one_time_step
   
 contains
 
@@ -200,6 +202,19 @@ contains
     allocate(problem%U(DoF*nb_elem),problem%P(DoF*nb_elem))
     problem%U=0.0
     problem%P=0.0
+    
+    if (problem%time_scheme.eq.'AB3') then
+       allocate(problem%FP1(DoF*nb_elem),problem%FU1(DoF*nb_elem))
+       allocate(problem%FP2(DoF*nb_elem),problem%FU2(DoF*nb_elem))
+       allocate(problem%FP3(DoF*nb_elem),problem%FU3(DoF*nb_elem))
+       problem%FP1=0.0
+       problem%FP2=0.0
+       problem%FP3=0.0
+       problem%FU1=0.0
+       problem%FU2=0.0
+       problem%FU3=0.0
+    end if
+    
     if (size(velocity).gt.nb_elem) then
        print*,'Velocity input size does not correspond'
        STOP
@@ -251,25 +266,25 @@ contains
     allocate(problem%receiver(0:problem%n_time_step/problem%n_display,2))
     if (.not.problem%forward) then
        allocate(problem%data(0:problem%n_time_step/problem%n_display,2))
-       allocate(problem%RHS_backward(0:problem%n_time_step/problem%n_display,2))
+       allocate(problem%receiver_signal(0:problem%n_time_step/problem%n_display,2))
        open(unit=10,file='data.dat',status="old", action="read")
        do i=0,size(problem%data,1)-1
           read(10,*) problem%data(i,1),problem%data(i,2)
        end do
        close(10)
        open(unit=10,file='receiver.dat',status="old", action="read")
-       do i=0,size(problem%RHS_backward,1)-1
-          read(10,*) problem%RHS_backward(i,1),problem%RHS_backward(i,2)
+       do i=0,size(problem%receiver_signal,1)-1
+          read(10,*) problem%receiver_signal(i,1),problem%receiver_signal(i,2)
        end do
        close(10)
-       do i=0,size(problem%RHS_backward,1)-1
-          problem%RHS_backward(i,2)=problem%data(i,2)*                          &
+       do i=0,size(problem%receiver_signal,1)-1
+          problem%receiver_signal(i,2)=problem%data(i,2)*                          &
                min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*   &
-               problem%data(i,1)/problem%final_time))!-problem%RHS_backward(i,2)
+               problem%data(i,1)/problem%final_time))!-problem%receiver_signal(i,2)
        end do
        open(unit=35,file='data_backward.dat')
-       do i=0,size(problem%RHS_backward,1)-1
-          write(35,*) problem%RHS_backward(i,1),problem%RHS_backward(i,2)
+       do i=0,size(problem%receiver_signal,1)-1
+          write(35,*) problem%receiver_signal(i,1),problem%receiver_signal(i,2)
        end do
     end if
 
@@ -282,7 +297,7 @@ contains
     print*,'dx                   ::',problem%dx
     print*,'dt                   ::',problem%dt
     print*,'n_time_step          ::',problem%n_time_step
-    print*,'n_time_step          ::',problem%n_display
+    print*,'n_display            ::',problem%n_display
     print*,'Boundary Condition   ::','   ',boundaries
     print*,'Time scheme         ::' ,'   ',time_scheme
     print*,'Penalisation alpha   ::',alpha
@@ -409,19 +424,19 @@ contains
     real               ,intent(in)  :: dx
     real               ,intent(in)  :: dt
     character(len=*)   ,intent(in)  :: time_scheme
-    
+
     integer                         :: i
     real,dimension(DoF,DoF)         :: m_loc_abc1,m_loc_abc2
     real,dimension(DoF,DoF)         :: minv_loc,minv_loc_abc1,minv_loc_abc2
 
     m_loc_abc1=m_loc
     m_loc_abc2=m_loc
-    
+
     if (time_scheme.eq.'LF') then
        m_loc_abc2(DoF,DoF)=m_loc_abc2(DoF,DoF)+0.5*velocity_end*dt/dx
        m_loc_abc1(1,1)=m_loc_abc1(1,1)+0.5*velocity_beg*dt/dx
     end if
-    
+
     minv_loc=LU_inv(m_loc)
     minv_loc_abc1=LU_inv(m_loc_abc1)
     minv_loc_abc2=LU_inv(m_loc_abc2)
@@ -435,6 +450,7 @@ contains
          =minv_loc_abc2
   end subroutine init_minv_glob_abc
 
+
   subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: mabs
     integer            ,intent(in)  :: nb_elem
@@ -446,10 +462,10 @@ contains
     character(len=*)   ,intent(in)  :: time_scheme
 
     integer :: i
-    
+
     mabs=0.0
-    
-    if (time_scheme.eq.'LF') then    
+
+    if (time_scheme.eq.'LF') then
        mabs(DoF*nb_elem,DoF*nb_elem)=0.5*velocity_end*dt/dx
        mabs(1,1)=0.5*velocity_beg*dt/dx
     else
@@ -564,19 +580,21 @@ contains
 
        alpha_dummy=alpha
 
-       Fp(1,1)=1.0+2.0*alpha_dummy
+       Fp(1,1)=0.0
        Fp(1,DoF*nb_elem)=0.0
 
-       Fp(Dof*nb_elem,Dof*nb_elem)=-1.0-2.0*alpha_dummy
+       Fp(Dof*nb_elem,Dof*nb_elem)=0.0
        Fp(Dof*nb_elem,1)=0.0
+
 
        alpha_dummy=-alpha
 
-       Fv(1,1)=0.0
+       Fv(1,1)=1.0!+2.0*alpha_dummy
        Fv(1,DoF*nb_elem)=0.0
 
-       Fv(Dof*nb_elem,Dof*nb_elem)=0.0
+       Fv(Dof*nb_elem,Dof*nb_elem)=-1.0!-2.0*alpha_dummy
        Fv(Dof*nb_elem,1)=0.0
+
 
     elseif (boundaries.eq.'ABC') then
 
@@ -604,20 +622,21 @@ contains
 
     elseif (boundaries.eq.'neumann') then
        alpha_dummy=alpha
-
-       Fp(1,1)=0.0
-       Fp(1,DoF*nb_elem)=0.0
-
-       Fp(Dof*nb_elem,Dof*nb_elem)=0.0
-       Fp(Dof*nb_elem,1)=0.0
-
-       alpha_dummy=-alpha
-
-       Fv(1,1)=1.0-2.0*alpha_dummy
-       Fv(1,DoF*nb_elem)=0.0
        
-       Fv(Dof*nb_elem,Dof*nb_elem)=-1.0+2.0*alpha_dummy
+       Fp(1,1)=1.0!-2.0*alpha_dummy
+       Fp(1,DoF*nb_elem)=0.0
+       
+       Fp(Dof*nb_elem,Dof*nb_elem)=-1.0!+2.0*alpha_dummy
+       Fp(Dof*nb_elem,1)=0.0
+       
+       alpha_dummy=-alpha
+   
+       Fv(1,1)=0.0
+       Fv(1,DoF*nb_elem)=0.0
+
+       Fv(Dof*nb_elem,Dof*nb_elem)=0.0
        Fv(Dof*nb_elem,1)=0.0
+
     end if
   end subroutine init_FpFv
 
@@ -669,12 +688,14 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt*1.5   !CFL for LF
+    dt=dt/10   !CFL for LF
 
     if (time_scheme.eq.'LF4') then
        dt=2.7*dt
     else if (time_scheme.eq.'RK4') then
-       dt=1.4*dt
+       dt=1.4*dt/10.0
+    else if (time_scheme.eq.'AB3') then
+       dt=dt/10.0
     end if
 
   end subroutine init_dt
@@ -782,7 +803,7 @@ contains
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
                                                    m_glob,minv_glob,s_glob,     &
-                                                   Fp,Fv,Dp,Dv,                 &
+                                                   Fp,Fv,Dp,Dv,dummy,           &
                                                    minv_glob_abc,mabs
     real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
     integer                                     :: i,j
@@ -837,7 +858,14 @@ contains
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
-          
+
+       if (.not.problem%forward) then
+          dummy=transpose(Av_full)
+          Av_full=transpose(Ap_full)
+          Ap_full=dummy
+          App_full=transpose(App_full)
+       end if
+       
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
        call Full2Sparse(App_full,problem%App)
@@ -921,53 +949,24 @@ contains
     real,dimension(problem%DoF*problem%nb_elem) :: P1,P2,P3,P4
     real                                        :: gd,gg
     real                                        :: f0
-    integer                                     :: last_node,i
-
-    last_node=problem%DoF*problem%nb_elem
-    RHSp=0.0
-    RHSv=0.0
-    f0=2.5
-
-    if (problem%boundaries.eq.'dirichlet') then
-       gg=min(0.5*t,0.5)
-       gd=0.0!-gg
-       RHSp(1)=gg*(-1.0-2.0*problem%alpha)
-       RHSp(last_node)=gd*(1.0+2.0*problem%alpha)
-       
-       RHSv(1)=0.0
-       RHSv(size(RHSv))=0.0
-
-       RHSv=sparse_matmul(problem%Minv_v,RHSv)
-       RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    end if
-    
-    if (problem%boundaries.eq.'ABC') then
-       if (problem%forward) then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
-          ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0+2.0*problem%alpha)
-       else
-          gg=eval_RHS(problem%RHS_backward,t,problem%final_time)
-          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
-          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
-       end if
-
-       RHSv=sparse_matmul(problem%Minv_v,RHSv)
-       RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    end if
+    integer                                     :: i
 
     if ((problem%time_scheme.eq.'LF').or.(problem%time_scheme.eq.'LF4')) then
 
+       call eval_RHS(RHSp,RHSv,problem,t)
+       
        problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
        if (problem%boundaries.eq.'ABC') then
-          problem%P=-sparse_matmul(problem%Ap,problem%U)-                          &
+          problem%P=-sparse_matmul(problem%Ap,problem%U)-                       &
                sparse_matmul(problem%App,problem%P)-RHSp
        else
           problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
        end if
 
     else if (problem%time_scheme.eq.'RK4') then
-       
+
+       call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
+
        U1=-sparse_matmul(problem%Av,problem%P)-RHSv
 
        if (problem%boundaries.eq.'ABC') then
@@ -977,7 +976,8 @@ contains
           P1=-sparse_matmul(problem%Ap,problem%U)-RHSp
        end if
 
-
+       call eval_RHS(RHSp,RHSv,problem,t-0.5*problem%dt)
+       
        U2=-sparse_matmul(problem%Av,problem%P+0.5*P1)-RHSv
        if (problem%boundaries.eq.'ABC') then
           P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-                       &
@@ -986,7 +986,8 @@ contains
           P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-RHSp
        end if
 
-
+       call eval_RHS(RHSp,RHSv,problem,t-0.5*problem%dt)
+       
        U3=-sparse_matmul(problem%Av,problem%P+0.5*P2)-RHSv
        if (problem%boundaries.eq.'ABC') then
           P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-                       &
@@ -995,9 +996,11 @@ contains
           P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-RHSp
        end if
 
+       call eval_RHS(RHSp,RHSv,problem,t)
+       
        U4=-sparse_matmul(problem%Av,problem%P+P3)-RHSv
        if (problem%boundaries.eq.'ABC') then
-          P4=-sparse_matmul(problem%Ap,problem%U+U3)-                       &
+          P4=-sparse_matmul(problem%Ap,problem%U+U3)-                           &
                sparse_matmul(problem%App,problem%P+P3)-RHSp
        else
           P4=-sparse_matmul(problem%Ap,problem%U+U3)-RHSp
@@ -1005,7 +1008,42 @@ contains
 
        problem%U=problem%U+(1.0/6.0)*(U1+2*U2+2*U3+U4)
        problem%P=problem%P+(1.0/6.0)*(P1+2*P2+2*P3+P4)
+       
+    else if (problem%time_scheme.eq.'AB3') then
+       
+       call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
+
+       U1=-sparse_matmul(problem%Av,problem%P)-RHSv
+
+       if (problem%boundaries.eq.'ABC') then
+          P1=-sparse_matmul(problem%Ap,problem%U)-                       &
+               sparse_matmul(problem%App,problem%P)-RHSp
+       else
+          P1=-sparse_matmul(problem%Ap,problem%U)-RHSp
+       end if
+
+       problem%U=problem%U+55.0/24.0*U1         &
+                 -59.0/24.0*problem%FU1         &
+                 +37.0/24.0*problem%FU2         &
+                 -9.0/24.0*problem%FU3
+       
+       problem%P=problem%P+55.0/24.0*P1         &
+                 -59.0/24.0*problem%FP1         &
+                 +37.0/24.0*problem%FP2         &
+                 -9.0/24.0*problem%FP3
+
+
+       problem%FU3=problem%FU2
+       problem%FU2=problem%FU1
+       problem%FU1=U1
+       problem%FP3=problem%FP2
+       problem%FP2=problem%FP1
+       problem%FP1=P1
+       
     end if
+
+
+    
   end subroutine one_time_step
 
 
@@ -1052,7 +1090,7 @@ contains
     if (problem%forward) then
        do i=0,problem%n_time_step
           t=i*problem%dt
-          write(25,*) t,eval_RHS(problem%receiver,t,problem%final_time)
+          write(25,*) t,eval_backward_signal(problem%receiver,t,problem%final_time)
        end do
     end if
   end subroutine all_time_step
@@ -1163,26 +1201,69 @@ contains
     print*,'-----------------------------'
 
   end subroutine error_periodique
-
-  function eval_RHS(RHS,t,final_time)
-    real,dimension(:,:),intent(in) :: RHS
+  
+  function eval_backward_signal(receiver_signal,t,final_time)
+    real,dimension(:,:),intent(in) :: receiver_signal
     real               ,intent(in) :: t
     real               ,intent(in) :: final_time
-    real                           :: eval_RHS
+    real                           :: eval_backward_signal
     integer                        :: i
     real                           :: t2
 
     t2=final_time-t
 
     i=1
-    do while ((RHS(i,1).le.t2).and.(i.ne.size(RHS,1)))
+    do while ((receiver_signal(i,1).le.t2).and.(i.ne.size(receiver_signal,1)))
        i=i+1
     end do
     i=i-1
 
-    eval_RHS=(t2-RHS(i,1))*RHS(i+1,2)+(RHS(i+1,1)-t2)*RHS(i,2)
-    eval_RHS=eval_RHS/(RHS(i+1,1)-RHS(i,1))
+    if (i.eq.0) then
+       print*,'test',i,t,t2
+    end if
 
-  end function eval_RHS
-  
+    eval_backward_signal=(t2-receiver_signal(i,1))*receiver_signal(i+1,2)       &
+                        +(receiver_signal(i+1,1)-t2)*receiver_signal(i,2)
+    eval_backward_signal=eval_backward_signal/(receiver_signal(i+1,1)           &
+                        -receiver_signal(i,1))
+  end function eval_backward_signal
+
+  subroutine eval_RHS(RHSp,RHSv,problem,t)
+    real,dimension(:)   ,intent(inout) :: RHSp
+    real,dimension(:)   ,intent(inout) :: RHSv
+    type(acoustic_problem),intent(in)  :: problem
+    real                  ,intent(in)  :: t
+    
+    real    :: gg,gd,f0
+    integer :: last_node
+    
+    RHSp=0.0
+    RHSv=0.0
+    f0=2.5
+
+    last_node=problem%DoF*problem%nb_elem
+    
+    if (problem%boundaries.eq.'dirichlet') then
+       gg=min(0.5*t,0.5)
+       gd=-gg
+       RHSv(1)=gg*(-1.0+0.0*problem%alpha)
+       RHSv(last_node)=gd*(1.0-0.0*problem%alpha)
+    end if
+
+    if (problem%signal.eq.'flat') then
+       if (problem%forward) then
+          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+       else
+          gg=eval_backward_signal(problem%receiver_signal,t,problem%final_time)
+          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
+       end if
+    end if
+
+    RHSp=sparse_matmul(problem%Minv_p,RHSp)
+    RHSv=sparse_matmul(problem%Minv_v,RHSv)
+
+  end subroutine eval_RHS
+
 end module m_acoustic

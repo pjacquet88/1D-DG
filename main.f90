@@ -8,12 +8,12 @@ program main
   !*************** Problem Parameters *******************************************
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
-  real            ,parameter :: total_length=2.0     ! domain length
+  real            ,parameter :: total_length=1.0     ! domain length
   real            ,parameter :: final_time=5.0       ! final time
-  character(len=*),parameter :: time_scheme='RK4'     ! change the time scheme
+  character(len=*),parameter :: time_scheme='LF'     ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
-  character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
+  character(len=*),parameter :: boundaries='ABC'   ! Boundary Conditions
   logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! iter max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
@@ -25,9 +25,8 @@ program main
   real,dimension(2)          :: density  ! density model change the size to change the model
   !******************************************************************************
 
-
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.false.
+  logical,parameter          :: animation=.true.
   logical,parameter          :: sortie=.true. ! animation an RTM not working if F
   logical,parameter          :: RTM=.true.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
@@ -173,7 +172,7 @@ program main
 
      call system('gnuplot RTM.script')
      call system('eog RTM.png &')
-     call system('eog RTM_Lap.png &')
+!     call system('eog RTM_Lap.png &')
   end if
   print*,'%%%%%%%%%%% END PROGRAM %%%%%%%%%%%%%%%%%%%%%%'
   print*,'Total time = ',t2-t0,'s'
