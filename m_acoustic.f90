@@ -3,6 +3,7 @@ module m_acoustic
   use m_matrix
   use m_powermethod
   use m_file_function
+  use m_time_scheme
   implicit none
   
   type acoustic_problem
@@ -19,8 +20,8 @@ module m_acoustic
      real                            :: alpha        ! penalisation value
      real,dimension(:),allocatable   :: U            ! velocity unknowns vector
      real,dimension(:),allocatable   :: P            ! pressure unknowns vector
-     real,dimension(:),allocatable   :: FP1,FP2,FP3  ! AB3 vectors
-     real,dimension(:),allocatable   :: FU1,FU2,FU3  ! AB3 vectors
+     real,dimension(:),allocatable   :: Pk1,Pk2,Pk3  ! AB3 vectors
+     real,dimension(:),allocatable   :: Uk1,Uk2,Uk3  ! AB3 vectors
      character(len=20)               :: boundaries   ! string for BC
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
@@ -29,7 +30,7 @@ module m_acoustic
      type(sparse_matrix)             :: Ap,App       
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
-     !----------- SOURCE & RECEIVER ---------------------------
+     !----------- SOURCE & RECEIVER ------------------
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
      real,dimension(:,:),allocatable :: receiver      ! vector describing receivers values as a function of time
@@ -204,15 +205,15 @@ contains
     problem%P=0.0
     
     if (problem%time_scheme.eq.'AB3') then
-       allocate(problem%FP1(DoF*nb_elem),problem%FU1(DoF*nb_elem))
-       allocate(problem%FP2(DoF*nb_elem),problem%FU2(DoF*nb_elem))
-       allocate(problem%FP3(DoF*nb_elem),problem%FU3(DoF*nb_elem))
-       problem%FP1=0.0
-       problem%FP2=0.0
-       problem%FP3=0.0
-       problem%FU1=0.0
-       problem%FU2=0.0
-       problem%FU3=0.0
+       allocate(problem%Pk1(DoF*nb_elem),problem%Uk1(DoF*nb_elem))
+       allocate(problem%Pk2(DoF*nb_elem),problem%Uk2(DoF*nb_elem))
+       allocate(problem%Pk3(DoF*nb_elem),problem%Uk3(DoF*nb_elem))
+       problem%Pk1=0.0
+       problem%Pk2=0.0
+       problem%Pk3=0.0
+       problem%Uk1=0.0
+       problem%Uk2=0.0
+       problem%Uk3=0.0
     end if
     
     if (size(velocity).gt.nb_elem) then
@@ -688,14 +689,14 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt/10   !CFL for LF
+    dt=dt*1.5/5.0  !CFL for LF
 
     if (time_scheme.eq.'LF4') then
        dt=2.7*dt
     else if (time_scheme.eq.'RK4') then
-       dt=1.4*dt/10.0
+       dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
-       dt=dt/10.0
+       dt=dt/4.7
     end if
 
   end subroutine init_dt
@@ -736,8 +737,8 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-            problem%k_max,problem%epsilon,problem%nb_elem,             &
-            problem%time_scheme)
+                    problem%k_max,problem%epsilon,problem%nb_elem,             &
+                    problem%time_scheme)
 
        if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
@@ -794,6 +795,13 @@ contains
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
                                                            problem%Ap%nb_ligne**2
+    App_full=0.0
+    if (problem%time_scheme.eq.'LF') then
+       do i=1,size(App_full,1)
+          App_full(i,i)=-1.0
+       end do
+    end if
+    call Full2Sparse(App_full,problem%App)
   end subroutine init_operator
 
 
@@ -939,7 +947,7 @@ contains
   end subroutine init_operator_abc
   
   
- !**************** RESOLUTION DU PROBLEM *************************************
+  !**************** RESOLUTION DU PROBLEM *************************************
   subroutine one_time_step(problem,t)
     type(acoustic_problem),intent(inout) :: problem
     real,                  intent(in)    :: t
@@ -950,100 +958,37 @@ contains
     real                                        :: gd,gg
     real                                        :: f0
     integer                                     :: i
+    real,dimension(problem%DoF*problem%nb_elem) :: FP_0,FP_half,FP_1
+    real,dimension(problem%DoF*problem%nb_elem) :: FU_0,FU_half,FU_1
 
     if ((problem%time_scheme.eq.'LF').or.(problem%time_scheme.eq.'LF4')) then
 
-       call eval_RHS(RHSp,RHSv,problem,t)
-       
-       problem%U=problem%U-sparse_matmul(problem%Av,problem%P)-RHSv
-       if (problem%boundaries.eq.'ABC') then
-          problem%P=-sparse_matmul(problem%Ap,problem%U)-                       &
-               sparse_matmul(problem%App,problem%P)-RHSp
-       else
-          problem%P=problem%P-sparse_matmul(problem%Ap,problem%U)-RHSp
-       end if
+       call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
+       call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
+
+       call LF_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,   &
+            FP_0,FU_half)
 
     else if (problem%time_scheme.eq.'RK4') then
 
-       call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
+       call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
+       call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
+       call eval_RHS(FP_1,FU_1,problem,t)
 
-       U1=-sparse_matmul(problem%Av,problem%P)-RHSv
+       call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+                        FP_0,FP_half,FP_1,FU_0,FU_half,FU_1)
 
-       if (problem%boundaries.eq.'ABC') then
-          P1=-sparse_matmul(problem%Ap,problem%U)-                       &
-               sparse_matmul(problem%App,problem%P)-RHSp
-       else
-          P1=-sparse_matmul(problem%Ap,problem%U)-RHSp
-       end if
-
-       call eval_RHS(RHSp,RHSv,problem,t-0.5*problem%dt)
-       
-       U2=-sparse_matmul(problem%Av,problem%P+0.5*P1)-RHSv
-       if (problem%boundaries.eq.'ABC') then
-          P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-                       &
-               sparse_matmul(problem%App,problem%P+0.5*P1)-RHSp
-       else
-          P2=-sparse_matmul(problem%Ap,problem%U+0.5*U1)-RHSp
-       end if
-
-       call eval_RHS(RHSp,RHSv,problem,t-0.5*problem%dt)
-       
-       U3=-sparse_matmul(problem%Av,problem%P+0.5*P2)-RHSv
-       if (problem%boundaries.eq.'ABC') then
-          P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-                       &
-               sparse_matmul(problem%App,problem%P+0.5*P2)-RHSp
-       else
-          P3=-sparse_matmul(problem%Ap,problem%U+0.5*U2)-RHSp
-       end if
-
-       call eval_RHS(RHSp,RHSv,problem,t)
-       
-       U4=-sparse_matmul(problem%Av,problem%P+P3)-RHSv
-       if (problem%boundaries.eq.'ABC') then
-          P4=-sparse_matmul(problem%Ap,problem%U+U3)-                           &
-               sparse_matmul(problem%App,problem%P+P3)-RHSp
-       else
-          P4=-sparse_matmul(problem%Ap,problem%U+U3)-RHSp
-       end if
-
-       problem%U=problem%U+(1.0/6.0)*(U1+2*U2+2*U3+U4)
-       problem%P=problem%P+(1.0/6.0)*(P1+2*P2+2*P3+P4)
-       
     else if (problem%time_scheme.eq.'AB3') then
-       
+
        call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
 
-       U1=-sparse_matmul(problem%Av,problem%P)-RHSv
-
-       if (problem%boundaries.eq.'ABC') then
-          P1=-sparse_matmul(problem%Ap,problem%U)-                       &
-               sparse_matmul(problem%App,problem%P)-RHSp
-       else
-          P1=-sparse_matmul(problem%Ap,problem%U)-RHSp
-       end if
-
-       problem%U=problem%U+55.0/24.0*U1         &
-                 -59.0/24.0*problem%FU1         &
-                 +37.0/24.0*problem%FU2         &
-                 -9.0/24.0*problem%FU3
-       
-       problem%P=problem%P+55.0/24.0*P1         &
-                 -59.0/24.0*problem%FP1         &
-                 +37.0/24.0*problem%FP2         &
-                 -9.0/24.0*problem%FP3
-
-
-       problem%FU3=problem%FU2
-       problem%FU2=problem%FU1
-       problem%FU1=U1
-       problem%FP3=problem%FP2
-       problem%FP2=problem%FP1
-       problem%FP1=P1
-       
+       call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+                        RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Pk3,          & 
+                        problem%Uk1,problem%Uk2,problem%Uk3)
     end if
 
 
-    
+
   end subroutine one_time_step
 
 
@@ -1105,10 +1050,7 @@ contains
     call free_sparse_matrix(problem%Av)
     call free_sparse_matrix(problem%Minv_p)
     call free_sparse_matrix(problem%Minv_v)
-
-    if (problem%boundaries.eq.'ABC') then
-       call free_sparse_matrix(problem%App)
-    end if
+    call free_sparse_matrix(problem%App)
   end subroutine free_acoustic_problem
 
   subroutine print_sol(problem,N)
@@ -1116,8 +1058,8 @@ contains
     integer               ,intent(in) :: N
 
     if (problem%forward) then
-      ! call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
-     !       problem%bernstein,N,'U')
+      call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
+           problem%bernstein,N,'U')
 
        call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
             problem%bernstein,N,'P')
@@ -1263,6 +1205,27 @@ contains
 
     RHSp=sparse_matmul(problem%Minv_p,RHSp)
     RHSv=sparse_matmul(problem%Minv_v,RHSv)
+    
+!    if (problem%time_scheme.eq.'RK4') then
+       RHSp=0.0
+       RHSv=0.0
+       RHSv(100)=1.0
+           
+
+       
+    RHSp=sparse_matmul(problem%Minv_p,RHSp)
+    RHSv=sparse_matmul(problem%Minv_v,RHSv)
+
+    ! write(22,*) RHSv
+    ! STOP
+
+    RHSv=sin(60*t)*RHSv
+    
+
+    
+    
+!    end if
+
 
   end subroutine eval_RHS
 

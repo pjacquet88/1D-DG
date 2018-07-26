@@ -124,7 +124,35 @@ contains
        Sparse%IA(i)=Sparse%IA(i-1)+NNN_ligne
     end do
   end subroutine Full2Sparse
-  
+
+  subroutine Sparse2Full(sparse,full)
+    type(sparse_matrix),intent(in)    :: sparse
+    real,dimension(:,:),allocatable,intent(out) :: full
+
+    integer :: i,j,nb_value,iia
+    
+    allocate(full(sparse%nb_ligne,sparse%nb_ligne))
+    full=0.0
+
+    do i=1,sparse%nb_ligne
+       nb_value=sparse%IA(i-1)
+       do iia=1,sparse%IA(i)-sparse%IA(i-1)
+          full(i,sparse%JA(nb_value+iia))=sparse%Values(nb_value+iia)
+       end do
+    end do
+  end subroutine Sparse2Full
+    
+  subroutine transpose_sparse(sparse,t_sparse)
+    type(sparse_matrix),intent(in)  :: sparse
+    type(sparse_matrix),intent(out) :: t_sparse
+    real,dimension(:,:),allocatable :: full
+
+    call init_sparse_matrix(t_sparse,sparse%NNN,sparse%nb_ligne)
+
+    call Sparse2Full(sparse,full)
+    call Full2Sparse(transpose(full),t_sparse)
+  end subroutine transpose_sparse
+
 
   function sparse_matmul(A,X)
     type(sparse_matrix),intent(in) :: A
