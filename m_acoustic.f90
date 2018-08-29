@@ -20,8 +20,8 @@ module m_acoustic
      real                            :: alpha        ! penalisation value
      real,dimension(:),allocatable   :: U            ! velocity unknowns vector
      real,dimension(:),allocatable   :: P            ! pressure unknowns vector
-     real,dimension(:),allocatable   :: Pk1,Pk2,Pk3  ! AB3 vectors
-     real,dimension(:),allocatable   :: Uk1,Uk2,Uk3  ! AB3 vectors
+     real,dimension(:),allocatable   :: Pk1,Pk2      ! AB3 vectors
+     real,dimension(:),allocatable   :: Uk1,Uk2      ! AB3 vectors
      character(len=20)               :: boundaries   ! string for BC
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
@@ -151,7 +151,7 @@ contains
   end function solution
 
 
-  subroutine init_problem(problem,nb_elem,DoF,time_scheme,velocity,density,      &
+  subroutine init_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
                           total_length,final_time,alpha,bernstein,signal,       &
                           boundaries,k_max,epsilon,source_loc,receiver_loc,     &
                           n_frame,forward)
@@ -207,13 +207,10 @@ contains
     if (problem%time_scheme.eq.'AB3') then
        allocate(problem%Pk1(DoF*nb_elem),problem%Uk1(DoF*nb_elem))
        allocate(problem%Pk2(DoF*nb_elem),problem%Uk2(DoF*nb_elem))
-       allocate(problem%Pk3(DoF*nb_elem),problem%Uk3(DoF*nb_elem))
        problem%Pk1=0.0
        problem%Pk2=0.0
-       problem%Pk3=0.0
        problem%Uk1=0.0
        problem%Uk2=0.0
-       problem%Uk3=0.0
     end if
     
     if (size(velocity).gt.nb_elem) then
@@ -983,8 +980,7 @@ contains
        call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
 
        call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-                        RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Pk3,          & 
-                        problem%Uk1,problem%Uk2,problem%Uk3)
+                        RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
     end if
   end subroutine one_time_step
 

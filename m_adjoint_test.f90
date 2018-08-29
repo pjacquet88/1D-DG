@@ -347,8 +347,8 @@ module m_adjoint_test
     real               ,intent(in)    :: dx
 
     real,dimension(size(U,2)) :: P_current,U_current
-    real,dimension(size(U,2)) :: Pk1,Pk2,Pk3
-    real,dimension(size(U,2)) :: Uk1,Uk2,Uk3
+    real,dimension(size(U,2)) :: Pk1,Pk2
+    real,dimension(size(U,2)) :: Uk1,Uk2
     integer                   :: i
 
 
@@ -359,10 +359,8 @@ module m_adjoint_test
     
     Pk1=0.0
     Pk2=0.0
-    Pk3=0.0
     Uk1=0.0
     Uk2=0.0
-    Uk3=0.0
     
     do i=3,n_time_step
        ! print*,'i',i
@@ -370,7 +368,7 @@ module m_adjoint_test
        P_current=P(i-1,:)
        U_current=U(i-1,:)
        call AB3_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FU(i-1,:),      &
-                        Pk1,Pk2,Pk3,Uk1,Uk2,Uk3)
+                        Pk1,Pk2,Uk1,Uk2)
        P(i,:)=P_current
        U(i,:)=U_current
     end do
@@ -391,16 +389,14 @@ module m_adjoint_test
     real               ,intent(in)    :: dx
 
     real,dimension(size(QU,2)) :: QP_current,QU_current
-    real,dimension(size(QU,2)) :: QPk1,QPk2,QPk3
-    real,dimension(size(QU,2)) :: QUk1,QUk2,QUk3
+    real,dimension(size(QU,2)) :: QPk1,QPk2
+    real,dimension(size(QU,2)) :: QUk1,QUk2
     integer                    :: i
 
     QPk1=0.0
     QPk2=0.0
-    QPk3=0.0
     QUk1=0.0
     QUk2=0.0
-    QUk3=0.0
 
    QP(n_time_step-2:n_time_step,:)=0.0
    QU(n_time_step-2:n_time_step,:)=0.0
@@ -413,7 +409,7 @@ module m_adjoint_test
        QP_current=QP(i+1,:)
        QU_current=QU(i+1,:)
        call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
-                        QPk1,QPk2,QPk3,QUk1,QUk2,QUk3)
+                        QPk1,QPk2,QUk1,QUk2)
        QP(i,:)=QP_current
        QU(i,:)=QU_current
     end do
