@@ -11,27 +11,27 @@ program main
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=0.1       ! final time
-  character(len=*),parameter :: time_scheme='LF'    ! change the time scheme
+  real            ,parameter :: final_time=10.0      ! final time
+  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
   logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! iter max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
-  integer         ,parameter :: n_frame=200         ! nb of times where sol. is saved
+  integer         ,parameter :: n_frame=1000         ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
   
   real,dimension(1)          :: velocity ! velocity model change the size to change the model 
-  real,dimension(1)          :: density  ! density model change the size to change the model
+  real,dimension(3)          :: density  ! density model change the size to change the model
   !******************************************************************************
   
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.false.
+  logical,parameter          :: animation=.true.
   logical,parameter          :: sortie=.true. ! animation an RTM not working if F
-  logical,parameter          :: RTM=.false.    ! if F -> just forward
+  logical,parameter          :: RTM=.true.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
   !******************************************************************************
 
@@ -43,7 +43,7 @@ program main
   integer                           :: i,j
   integer                           :: values(1:8), k
   integer,dimension(:), allocatable :: seed
-  real                              :: t0,t1,t2
+  real                              :: t0,t1,t2,t3
   logical                           :: file_exists
   !******************************************************************************
 
@@ -105,7 +105,7 @@ program main
   App=forward%App
   dt=forward%dt
   dx=forward%dx
-  n_adjoint_time_step=forward%n_time_step
+  n_adjoint_time_step=8!forward%n_time_step
   
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
@@ -171,7 +171,7 @@ program main
 
      call system('gnuplot RTM.script')
      call system('eog RTM.png &')
-     !     call system('eog RTM_Lap.png &')
+     call system('eog RTM_Lap.png &')
   end if
 
   
@@ -180,13 +180,34 @@ program main
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
   
-  call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,nb_elem,DoF,dx)
-  call forward_test(test)
-  call backward_test(test)
-  print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
-  print*,'inner product QPQU/FUFP',inner_product(test%QP,test%QU,test%FP,test%FU)
-  
+  ! call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,nb_elem,DoF,dx)
+  ! call forward_test(test)
+  ! call backward_test(test)
+  ! print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
+  ! print*,'inner product QPQU/FUFP',inner_product(test%FP,test%FU,test%QP,test%QU)
+  ! print*,'******* U/DU **********'
+  ! do i=0,test%n_time_step
+  !    print*,i,dot_product(test%U(i,:),test%U(i,:)),dot_product(test%DU(i,:),test%DU(i,:))
+  ! end do
+  !   print*,'******* P/DP **********'
+  !   do i=0,test%n_time_step
+  !    print*,i,dot_product(test%P(i,:),test%P(i,:)),dot_product(test%DP(i,:),test%DP(i,:))
+  ! end do
+  ! print*,'******* FU/QU **********'
+  ! do i=0,test%n_time_step
+  !    print*,i,dot_product(test%FU(i,:),test%FU(i,:)),dot_product(test%QU(i,:),test%QU(i,:))
+  ! end do
+  ! print*,'******* FP/QP **********'
+  ! do i=0,test%n_time_step
+  !    print*,i,dot_product(test%FP(i,:),test%FP(i,:)),dot_product(test%QP(i,:),test%QP(i,:))
+  ! end do
 
+  ! print*,'********test half********'
+  ! do i=1,test%n_time_step
+  !    print*,i,dot_product(test%FU_half(i,:),test%FU_half(i,:)),dot_product(test%DU_half(i,:),test%DU_half(i,:))
+  ! end do
+  
+  call cpu_time(t3)
 
 
   
@@ -194,6 +215,7 @@ program main
   print*,'Total time = ',t2-t0,'s'
   print*,'Forward time = ',t1-t0,'s'
   print*,'Backward time = ',t2-t1,'s'
+  print*,'Ajoint test time = ',t3-t2,'s'
 
 
 

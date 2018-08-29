@@ -65,14 +65,18 @@ module m_adjoint_test
     allocate(test%QP(0:n_time_step,test%size_v),test%QP2(0:n_time_step,test%size_v))
     allocate(test%QU(0:n_time_step,test%size_v),test%QU2(0:n_time_step,test%size_v))
     allocate(test%FP(0:n_time_step,test%size_v),test%FU(0:n_time_step,test%size_v))
-    allocate(test%FP_half(0:n_time_step,test%size_v),test%FU_half(0:n_time_step,test%size_v))
+    allocate(test%FP_half(1:n_time_step,test%size_v),test%FU_half(1:n_time_step,test%size_v))
     allocate(test%DP(0:n_time_step,test%size_v),test%DU(0:n_time_step,test%size_v))
-    allocate(test%DP_half(0:n_time_step,test%size_v),test%DU_half(0:n_time_step,test%size_v))
+    allocate(test%DP_half(1:n_time_step,test%size_v),test%DU_half(1:n_time_step,test%size_v))
     
-    call random_number(test%P)
-    call random_number(test%U)
-    call random_number(test%QP)
-    call random_number(test%QU)
+    ! call random_number(test%P)
+    ! call random_number(test%U)
+    ! call random_number(test%QP)
+    ! call random_number(test%QU)
+    test%P=0.0
+    test%U=0.0
+    test%QP=0.0
+    test%QU=0.0
     call random_number(test%FP)
     call random_number(test%FP_half)
     call random_number(test%FU)
@@ -108,34 +112,54 @@ module m_adjoint_test
           test%DP_half(i,j)=test%DP_half(i,j)-0.5
        end do
     end do
+
+    do i=0,n_time_step
+       test%FP(i,:)=i!real(i/n_time_step)-0.5
+       test%FU(i,:)=i!real(i/n_time_step)-0.5
+    end do
+
+    do i=1,n_time_step
+       test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+       test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    end do
+
     
+    do i=0,n_time_step
+       test%DP(i,:)=n_time_step-i!real(i/n_time_step)-0.5
+       test%DU(i,:)=n_time_step-i!real(i/n_time_step)-0.5
+    end do
+
+    do i=1,n_time_step
+       test%DP_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
+       test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
+    end do
+
+
   end subroutine init_adjoint_test
 
   
   subroutine forward_test(test)
     type(t_adjoint_test),intent(inout) :: test
-    
-   test%U(0,:)=0.0
-   test%P(0,:)=0.0
-   test%FU(0,:)=0.0
-   test%FP(0,:)=0.0
 
-    if (test%time_scheme.eq.'RK4') then
-       call test_RK4_forward(test%P,test%U,test%FP,test%FU,test%FP_half,        &
-                             test%FU_half,test%Ap,test%Av,test%App,             &
-                             test%n_time_step,test%size_v,test%nb_elem,test%DoF,&
-                             test%dx)
-       
-    else if (test%time_scheme.eq.'LF') then
+
+    if (test%time_scheme.eq.'LF') then
        call test_LF_forward(test%P,test%U,test%FP,test%FU_half,test%Ap,test%Av, &
-                            test%App,test%n_time_step,test%size_v,test%nb_elem, &
-                            test%DoF,test%dx)
+            test%App,test%n_time_step,test%size_v,test%nb_elem, &
+            test%DoF,test%dx)
+
+
+    else if (test%time_scheme.eq.'RK4') then
+       call test_RK4_forward(test%P,test%U,test%FP,test%FU,test%FP_half,        &
+            test%FU_half,test%Ap,test%Av,test%App,             &
+            test%n_time_step,test%size_v,test%nb_elem,test%DoF,&
+            test%dx)
+
 
     else if (test%time_scheme.eq.'AB3') then
        call  test_AB3_forward(test%P,test%U,test%FP,test%FU,test%Ap,test%Av,    &
-                              test%App,test%n_time_step,test%size_v,            &
-                              test%nb_elem,test%DoF,test%dx)
-       
+            test%App,test%n_time_step,test%size_v,            &
+            test%nb_elem,test%DoF,test%dx)
+
     else
        print*,'not recongnized time scheme'
     end if
@@ -145,25 +169,21 @@ module m_adjoint_test
   subroutine backward_test(test)
     type(t_adjoint_test),intent(inout) :: test
 
-    test%QU(0,:)=0.0
-    test%QP(0,:)=0.0
-    test%DU(0,:)=0.0
-    test%DP(0,:)=0.0
 
-    if (test%time_scheme.eq.'RK4') then
-       call test_RK4_forward(test%QP,test%QU,test%DP,test%DU,test%DP_half,        &
-            test%DU_half,test%tAv,test%tAp,test%tApp,             &
+    if (test%time_scheme.eq.'LF') then
+       call test_LF_backward(test%QP,test%QU,test%DP,test%DU_half,test%Ap,test%Av, &
+            test%App,test%n_time_step,test%size_v,test%nb_elem, &
+            test%DoF,test%dx)
+    
+    else if (test%time_scheme.eq.'RK4') then
+       call test_RK4_backward(test%QP,test%QU,test%DP,test%DU,test%DP_half,        &
+            test%DU_half,test%Ap,test%Av,test%App,             &
             test%n_time_step,test%size_v,test%nb_elem,test%DoF,&
             test%dx)
 
-    else if (test%time_scheme.eq.'LF') then
-       call test_LF_forward(test%QP,test%QU,test%DP,test%DU_half,test%tAv,test%tAp, &
-            test%tApp,test%n_time_step,test%size_v,test%nb_elem, &
-            test%DoF,test%dx)
-
     else if (test%time_scheme.eq.'AB3') then
-       call  test_AB3_forward(test%QP,test%QU,test%DP,test%DU,test%tAv,test%tAp,    &
-            test%tApp,test%n_time_step,test%size_v,            &
+       call test_AB3_backward(test%QP,test%QU,test%DP,test%DU,test%Ap,test%Av,    &
+            test%App,test%n_time_step,test%size_v,            &
             test%nb_elem,test%DoF,test%dx)
 
     else
@@ -176,8 +196,8 @@ module m_adjoint_test
        size_v,nb_elem,DoF,dx)
     real,dimension(0:n_time_step,size_v),intent(inout) :: P
     real,dimension(0:n_time_step,size_v),intent(inout) :: U
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FP
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FU_half
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FP
+    real,dimension(1:n_time_step,size_v),intent(inout) :: FU_half
     type(sparse_matrix),intent(in)    :: Ap,Av,App
     integer            ,intent(in)    :: n_time_step
     integer            ,intent(in)    :: size_v
@@ -188,30 +208,61 @@ module m_adjoint_test
     real,dimension(size(U,2)) :: P_current,U_current
     integer                   :: i
 
-    call print_vect(U(0,:),nb_elem,DoF,dx,.true.,0,'FU')
-    call print_vect(P(0,:),nb_elem,DoF,dx,.true.,0,'FP')
+    P(0,:)=0.0
+    U(0,:)=0.0
+    FP(0,:)=0.0
+    
     do i=1,n_time_step
        ! print*,'i',i
 
        P_current=P(i-1,:)
        U_current=U(i-1,:)
-       call LF_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FU_half(i-1,:))
+       call LF_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FU_half(i,:))
        P(i,:)=P_current
        U(i,:)=U_current
-
-       call print_vect(U(i,:),nb_elem,DoF,dx,.true.,i,'FU')
-       call print_vect(P(i,:),nb_elem,DoF,dx,.true.,i,'FP')
     end do
   end subroutine test_LF_forward
 
-    subroutine test_RK4_forward(P,U,FP,FU,FP_half,FU_half,Ap,Av,App,n_time_step,       &
+  subroutine test_LF_backward(QP,QU,DP,DU_half,tAv,tAp,tApp,n_time_step,      &
        size_v,nb_elem,DoF,dx)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DP
+    real,dimension(1:n_time_step,size_v),intent(inout) :: DU_half
+    type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
+    integer            ,intent(in)    :: n_time_step
+    integer            ,intent(in)    :: size_v
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    real               ,intent(in)    :: dx
+
+    real,dimension(size(QU,2)) :: QP_current,QU_current
+    integer                   :: i
+
+    QP(n_time_step,:)=0.0
+    QU(n_time_step,:)=0.0
+    DP(n_time_step,:)=0.0
+!    DU_half(n_time_step,:)=0.0
+    
+    do i=n_time_step-1,0-1
+       ! print*,'i',i
+
+       QP_current=QP(i+1,:)
+       QU_current=QU(i+1,:)
+       call LF_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU_half(i+1,:))
+       QP(i,:)=QP_current
+       QU(i,:)=QU_current
+    end do
+  end subroutine test_LF_backward
+
+    subroutine test_RK4_forward(P,U,FP,FU,FP_half,FU_half,Ap,Av,App,n_time_step,&
+                                size_v,nb_elem,DoF,dx)
     real,dimension(0:n_time_step,size_v),intent(inout) :: U
     real,dimension(0:n_time_step,size_v),intent(inout) :: P
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FP
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FU
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FP_half
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FU_half
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FU
+    real,dimension(1:n_time_step,size_v),intent(inout) :: FP_half
+    real,dimension(1:n_time_step,size_v),intent(inout) :: FU_half
     type(sparse_matrix),intent(in)    :: Ap,Av,App
     integer            ,intent(in)    :: n_time_step
     integer            ,intent(in)    :: size_v
@@ -221,30 +272,72 @@ module m_adjoint_test
 
     real,dimension(size(U,2)) :: P_current,U_current
     integer                   :: i
+    
+    P(0,:)=0.0
+    U(0,:)=0.0
+    FP(0,:)=0.0
+    FU(0,:)=0.0
 
-    call print_vect(U(0,:),nb_elem,DoF,dx,.true.,0,'FU')
-    call print_vect(P(0,:),nb_elem,DoF,dx,.true.,0,'FP')
     do i=1,n_time_step
        ! print*,'i',i
 
        P_current=P(i-1,:)
        U_current=U(i-1,:)
-       call RK4_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FP_half(i-1,:),   &
-            FP(i,:),FU(i-1,:),FU_half(i-1,:),FU(i,:))
+       call RK4_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FP_half(i,:),   &
+            FP(i,:),FU(i-1,:),FU_half(i,:),FU(i,:))
        P(i,:)=P_current
        U(i,:)=U_current
 
-       call print_vect(U(i,:),nb_elem,DoF,dx,.true.,i,'FU')
-       call print_vect(P(i,:),nb_elem,DoF,dx,.true.,i,'FP')
     end do
+ 
   end subroutine test_RK4_forward
+
+  subroutine test_RK4_backward(QP,QU,DP,DU,DP_half,DU_half,tAv,tAp,tApp, &
+                               n_time_step,size_v,nb_elem,DoF,dx)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DU
+    real,dimension(1:n_time_step,size_v),intent(inout) :: DP_half
+    real,dimension(1:n_time_step,size_v),intent(inout) :: DU_half
+    type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
+    integer            ,intent(in)    :: n_time_step
+    integer            ,intent(in)    :: size_v
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    real               ,intent(in)    :: dx
+
+    real,dimension(size(QP,2)) :: QP_current,QU_current
+    integer                    :: i
+    
+    QP(n_time_step,:)=0.0
+    QU(n_time_step,:)=0.0
+    DP(n_time_step,:)=0.0
+    !DP_half(n_time_step,:)=0.0
+    DU(n_time_step,:)=0.0
+    !DU_half(n_time_step,:)=0.0
+    
+    do i=n_time_step-1,0,-1
+       ! print*,'i',i
+
+       QP_current=QP(i+1,:)
+       QU_current=QU(i+1,:)
+       call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),           &
+                        DP_half(i+1,:),DP(i,:),DU(i+1,:),DU_half(i+1,:),DU(i,:))
+       QP(i,:)=QP_current
+       QU(i,:)=QU_current
+    end do
+    
+  end subroutine test_RK4_backward
+
+  
 
   subroutine test_AB3_forward(P,U,FP,FU,Ap,Av,App,n_time_step,size_v,nb_elem,   &
                               DoF,dx)
     real,dimension(0:n_time_step,size_v),intent(inout) :: U
     real,dimension(0:n_time_step,size_v),intent(inout) :: P
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FP
-    real,dimension(0:n_time_step,size_v),intent(in)    :: FU
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: FP
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: FU
     
     type(sparse_matrix),intent(in)    :: Ap,Av,App
     integer            ,intent(in)    :: n_time_step
@@ -258,9 +351,12 @@ module m_adjoint_test
     real,dimension(size(U,2)) :: Uk1,Uk2,Uk3
     integer                   :: i
 
-    call print_vect(U(0,:),nb_elem,DoF,dx,.true.,0,'FU')
-    call print_vect(P(0,:),nb_elem,DoF,dx,.true.,0,'FP')
 
+    P(0:2,:)=0.0
+    U(0:2,:)=0.0
+    FP(0:2,:)=0.0
+    FU(0:2,:)=0.0
+    
     Pk1=0.0
     Pk2=0.0
     Pk3=0.0
@@ -268,7 +364,7 @@ module m_adjoint_test
     Uk2=0.0
     Uk3=0.0
     
-    do i=1,n_time_step
+    do i=3,n_time_step
        ! print*,'i',i
 
        P_current=P(i-1,:)
@@ -277,29 +373,170 @@ module m_adjoint_test
                         Pk1,Pk2,Pk3,Uk1,Uk2,Uk3)
        P(i,:)=P_current
        U(i,:)=U_current
-
-       call print_vect(U(i,:),nb_elem,DoF,dx,.true.,i,'FU')
-       call print_vect(P(i,:),nb_elem,DoF,dx,.true.,i,'FP')
     end do
   end subroutine test_AB3_forward
 
-  
+  subroutine test_AB3_backward(QP,QU,DP,DU,tAv,tAp,tApp,n_time_step,size_v,     &
+                               nb_elem,DoF,dx)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DU
+    
+    type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
+    integer            ,intent(in)    :: n_time_step
+    integer            ,intent(in)    :: size_v
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    real               ,intent(in)    :: dx
+
+    real,dimension(size(QU,2)) :: QP_current,QU_current
+    real,dimension(size(QU,2)) :: QPk1,QPk2,QPk3
+    real,dimension(size(QU,2)) :: QUk1,QUk2,QUk3
+    integer                    :: i
+
+    QPk1=0.0
+    QPk2=0.0
+    QPk3=0.0
+    QUk1=0.0
+    QUk2=0.0
+    QUk3=0.0
+
+   QP(n_time_step-2:n_time_step,:)=0.0
+   QU(n_time_step-2:n_time_step,:)=0.0
+   DP(n_time_step-2:n_time_step,:)=0.0
+   DU(n_time_step-2:n_time_step,:)=0.0
+     
+    do i=n_time_step-3,0,-1
+       ! print*,'i',i
+
+       QP_current=QP(i+1,:)
+       QU_current=QU(i+1,:)
+       call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
+                        QPk1,QPk2,QPk3,QUk1,QUk2,QUk3)
+       QP(i,:)=QP_current
+       QU(i,:)=QU_current
+    end do
+  end subroutine test_AB3_backward
+
   function inner_product(P,U,DP,DU)
     real,dimension(:,:),intent(in) :: U,P
     real,dimension(:,:),intent(in) :: DU,DP
     real                           :: inner_product
     integer                        :: i,j
     integer                        :: n_time_step
+    real,dimension(size(U,2)) :: EP,EU
+    real :: b0,b1,b2,b3
 
+    b0=55.0/24.0
+    b1=-59.0/24.0
+    b2=37.0/24.0
+    b3=-9.0/24.0
+    
     n_time_step=size(U,1)
     inner_product=0.0
+
     
     do i=1,n_time_step
+
+       
+    ! EP=b0*DP(i,:)       &
+    !      +b1*DP(i-1,:)  &
+    !      +b2*DP(i-2,:)  &
+    !      +b3*DP(i-3,:)
+
+    ! EU=b0*DU(i,:)       &
+    !      +b1*DU(i-1,:)  &
+    !      +b2*DU(i-2,:)  &
+    !      +b3*DU(i-3,:)
+
+
+       
        do j=1,size(U,2)
-          inner_product=inner_product+U(i,j)*DU(n_time_step-i+1,j)                &
-                                     +P(i,j)*DP(n_time_step-i+1,j)
+         !           inner_product=inner_product+U(i,j)*EU(j)+P(i,j)*EP(j)
+          inner_product=inner_product+P(i,j)*DP(i,j)+U(i,j)*DU(i,j)
        end do
     end do
   end function inner_product
+  
+  function inner_product1(P,U,DP,DU)
+    real,dimension(:,:),intent(in) :: U,P
+    real,dimension(:,:),intent(in) :: DU,DP
+    real                           :: inner_product1
+    integer                        :: i,j
+    integer                        :: n_time_step
+    real,dimension(size(U,2)) :: EP,EU
+    real :: b0,b1,b2,b3
+
+    b0=55.0/24.0
+    b1=-59.0/24.0
+    b2=37.0/24.0
+    b3=-9.0/24.0
+    
+    n_time_step=size(U,1)
+    inner_product1=0.0
+
+    
+    do i=4,n_time_step-4
+
+       
+    EP=b0*DP(n_time_step-i+1,:)    ! &
+        ! +b1*DP(n_time_step-i+2,:)  &
+        ! +b2*DP(n_time_step-i+3,:)  &
+        ! +b3*DP(n_time_step-i+4,:)
+
+    EU=b0*DU(n_time_step-i+1,:)    ! &
+        ! +b1*DU(n_time_step-i+2,:)  &
+        ! +b2*DU(n_time_step-i+3,:)  &
+        ! +b3*DU(n_time_step-i+4,:)
+
+
+       
+       do j=1,size(U,2)
+          inner_product1=inner_product1+U(i,j)*EU(j)+P(i,j)*EP(j)
+       end do
+    end do
+  end function inner_product1
+
+  function inner_product2(FP,FU,QP,QU)
+    real,dimension(:,:),intent(in) :: FU,FP
+    real,dimension(:,:),intent(in) :: QU,QP
+    real                           :: inner_product2
+    integer                        :: i,j
+    integer                        :: n_time_step
+    real,dimension(size(FU,2)) :: EP,EU
+    real :: b0,b1,b2,b3
+
+    b0=55.0/24.0
+    b1=-59.0/24.0
+    b2=37.0/24.0
+    b3=-9.0/24.0
+    
+    n_time_step=size(FU,1)
+    inner_product2=0.0
+
+    
+    do i=4,n_time_step-4
+
+       
+    EP=b0*FP(i,:)       &
+         +b1*FP(i-1,:)  &
+         +b2*FP(i-2,:)  &
+         +b3*FP(i-3,:)
+
+    EU=b0*FU(i,:)       &
+         +b1*FU(i-1,:)  &
+         +b2*FU(i-2,:)  &
+         +b3*FU(i-3,:)
+
+
+       
+       do j=1,size(FU,2)
+          inner_product2=inner_product2+EU(j)*QU(n_time_step-i+1,j) &
+                                     +EP(j)*QP(n_time_step-i+1,j)
+       end do
+    end do
+  end function inner_product2
+  
 
 end module m_adjoint_test

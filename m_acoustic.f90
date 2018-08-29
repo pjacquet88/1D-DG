@@ -689,7 +689,7 @@ contains
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt*1.5/5.0  !CFL for LF
+    dt=dt*1.0  !CFL for LF
 
     if (time_scheme.eq.'LF4') then
        dt=2.7*dt
@@ -867,12 +867,12 @@ contains
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
 
-       if (.not.problem%forward) then
-          dummy=transpose(Av_full)
-          Av_full=transpose(Ap_full)
-          Ap_full=dummy
-          App_full=transpose(App_full)
-       end if
+       ! if (.not.problem%forward) then
+       !    dummy=transpose(Av_full)
+       !    Av_full=transpose(Ap_full)
+       !    Ap_full=dummy
+       !    App_full=transpose(App_full)
+       ! end if
        
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
@@ -986,9 +986,6 @@ contains
                         RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Pk3,          & 
                         problem%Uk1,problem%Uk2,problem%Uk3)
     end if
-
-
-
   end subroutine one_time_step
 
 
@@ -1205,26 +1202,6 @@ contains
 
     RHSp=sparse_matmul(problem%Minv_p,RHSp)
     RHSv=sparse_matmul(problem%Minv_v,RHSv)
-    
-!    if (problem%time_scheme.eq.'RK4') then
-       RHSp=0.0
-       RHSv=0.0
-       RHSv(100)=1.0
-           
-
-       
-    RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    RHSv=sparse_matmul(problem%Minv_v,RHSv)
-
-    ! write(22,*) RHSv
-    ! STOP
-
-    RHSv=sin(60*t)*RHSv
-    
-
-    
-    
-!    end if
 
 
   end subroutine eval_RHS
