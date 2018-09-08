@@ -1,4 +1,4 @@
-program main
+program main!
   use m_file_function
   use m_polynom
   use m_matrix
@@ -11,15 +11,15 @@ program main
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=10.0      ! final time
-  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
+  real            ,parameter :: final_time=0.1       ! final time
+  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
   logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! iter max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
-  integer         ,parameter :: n_frame=1000         ! nb of times where sol. is saved
+  integer         ,parameter :: n_frame=10           ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
   
@@ -29,9 +29,9 @@ program main
   
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.true.
-  logical,parameter          :: sortie=.true. ! animation an RTM not working if F
-  logical,parameter          :: RTM=.true.    ! if F -> just forward
+  logical,parameter          :: animation=.false.
+  logical,parameter          :: sortie=.false. ! animation an RTM not working if F
+  logical,parameter          :: RTM=.false.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
   !******************************************************************************
 
@@ -105,7 +105,7 @@ program main
   App=forward%App
   dt=forward%dt
   dx=forward%dx
-  n_adjoint_time_step=8!forward%n_time_step
+  n_adjoint_time_step=200!forward%n_time_step
   
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
@@ -180,32 +180,21 @@ program main
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
   
-  ! call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,nb_elem,DoF,dx)
-  ! call forward_test(test)
-  ! call backward_test(test)
-  ! print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
-  ! print*,'inner product QPQU/FUFP',inner_product(test%FP,test%FU,test%QP,test%QU)
-  ! print*,'******* U/DU **********'
-  ! do i=0,test%n_time_step
-  !    print*,i,dot_product(test%U(i,:),test%U(i,:)),dot_product(test%DU(i,:),test%DU(i,:))
-  ! end do
-  !   print*,'******* P/DP **********'
-  !   do i=0,test%n_time_step
-  !    print*,i,dot_product(test%P(i,:),test%P(i,:)),dot_product(test%DP(i,:),test%DP(i,:))
-  ! end do
-  ! print*,'******* FU/QU **********'
-  ! do i=0,test%n_time_step
-  !    print*,i,dot_product(test%FU(i,:),test%FU(i,:)),dot_product(test%QU(i,:),test%QU(i,:))
-  ! end do
-  ! print*,'******* FP/QP **********'
-  ! do i=0,test%n_time_step
-  !    print*,i,dot_product(test%FP(i,:),test%FP(i,:)),dot_product(test%QP(i,:),test%QP(i,:))
-  ! end do
+  call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,nb_elem,DoF,dx)
+  call forward_test(test)
+  print*,'inner product1 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
+  call extract_g(test)
+  call forward_test2(test)
+  print*,'inner product2 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
 
-  ! print*,'********test half********'
-  ! do i=1,test%n_time_step
-  !    print*,i,dot_product(test%FU_half(i,:),test%FU_half(i,:)),dot_product(test%DU_half(i,:),test%DU_half(i,:))
-  ! end do
+
+  
+  call backward_test(test)
+  print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
+  ! print*,'inner product QPQU/FUFP',inner_product(test%FP,test%FU,test%QP,test%QU)
+  ! print*,'inner product QPQU/FUFP',inner_product(test%GP,test%GU,test%QP,test%QU)
+  
+!  print*,'Difference :',inner_product(test%P,test%U,test%DP,test%DU)-inner_product(test%FP,test%FU,test%QP,test%QU)
   
   call cpu_time(t3)
 

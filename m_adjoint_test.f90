@@ -16,6 +16,7 @@ module m_adjoint_test
      real,dimension(:,:),allocatable :: FP_half,FU_half
      real,dimension(:,:),allocatable :: DP,DU
      real,dimension(:,:),allocatable :: DP_half,DU_half
+     real,dimension(:,:),allocatable :: GP,GU
      real                            :: dt
      type(sparse_matrix)             :: Ap,tAp
      type(sparse_matrix)             :: Av,tAv
@@ -45,7 +46,7 @@ module m_adjoint_test
 
     integer :: i,j
     real,dimension(:,:),allocatable :: Ap_full,tAp_full,ttAp_full
-    
+
     test%size_v=size(Ap%IA)-1
     test%n_time_step=n_time_step
     test%time_scheme=time_scheme
@@ -60,6 +61,8 @@ module m_adjoint_test
     test%DoF=DoF
     test%dx=dx
 
+
+    
     allocate(test%P(0:n_time_step,test%size_v),test%P2(0:n_time_step,test%size_v))
     allocate(test%U(0:n_time_step,test%size_v),test%U2(0:n_time_step,test%size_v))
     allocate(test%QP(0:n_time_step,test%size_v),test%QP2(0:n_time_step,test%size_v))
@@ -68,7 +71,7 @@ module m_adjoint_test
     allocate(test%FP_half(1:n_time_step,test%size_v),test%FU_half(1:n_time_step,test%size_v))
     allocate(test%DP(0:n_time_step,test%size_v),test%DU(0:n_time_step,test%size_v))
     allocate(test%DP_half(1:n_time_step,test%size_v),test%DU_half(1:n_time_step,test%size_v))
-    
+    allocate(test%GP(0:n_time_step,test%size_v),test%GU(0:n_time_step,test%size_v))
     ! call random_number(test%P)
     ! call random_number(test%U)
     ! call random_number(test%QP)
@@ -134,7 +137,6 @@ module m_adjoint_test
        test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
     end do
 
-
   end subroutine init_adjoint_test
 
   
@@ -165,24 +167,28 @@ module m_adjoint_test
     end if
 
   end subroutine forward_test
-     
-  subroutine backward_test(test)
+
+    subroutine forward_test2(test)
     type(t_adjoint_test),intent(inout) :: test
 
+    
+    call extract_g(test)
 
     if (test%time_scheme.eq.'LF') then
-       call test_LF_backward(test%QP,test%QU,test%DP,test%DU_half,test%Ap,test%Av, &
+       call test_LF_forward(test%P,test%U,test%FP,test%FU_half,test%Ap,test%Av, &
             test%App,test%n_time_step,test%size_v,test%nb_elem, &
             test%DoF,test%dx)
-    
+
+
     else if (test%time_scheme.eq.'RK4') then
-       call test_RK4_backward(test%QP,test%QU,test%DP,test%DU,test%DP_half,        &
-            test%DU_half,test%Ap,test%Av,test%App,             &
+       call test_RK4_forward2(test%P,test%U,test%GP,test%GU,test%FP_half,        &
+            test%FU_half,test%Ap,test%Av,test%App,             &
             test%n_time_step,test%size_v,test%nb_elem,test%DoF,&
-            test%dx)
+            test%dx,test%GP,test%GU)
+
 
     else if (test%time_scheme.eq.'AB3') then
-       call test_AB3_backward(test%QP,test%QU,test%DP,test%DU,test%Ap,test%Av,    &
+       call  test_AB3_forward(test%P,test%U,test%FP,test%FU,test%Ap,test%Av,    &
             test%App,test%n_time_step,test%size_v,            &
             test%nb_elem,test%DoF,test%dx)
 
@@ -190,7 +196,63 @@ module m_adjoint_test
        print*,'not recongnized time scheme'
     end if
 
+  end subroutine forward_test2
+     
+  subroutine backward_test(test)
+    type(t_adjoint_test),intent(inout) :: test
+
+    if (test%time_scheme.eq.'LF') then
+       call test_LF_backward(test%QP,test%QU,test%DP,test%DU_half,test%Ap,test%Av, &
+            test%App,test%n_time_step,test%size_v,test%nb_elem, &
+            test%DoF,test%dx)
+    
+    else if (test%time_scheme.eq.'RK4') then
+       call test_RK4_backward(test%QP,test%QU,test%DP,test%DU,test%tAv,test%tAp,  &
+            test%tApp,test%n_time_step,test%size_v,test%nb_elem,test%DoF,test%dx)
+
+    else if (test%time_scheme.eq.'AB3') then
+       call test_AB3_backward(test%QP,test%QU,test%DP,test%DU,test%tAv,test%tAp,&
+            test%tApp,test%n_time_step,test%size_v,            &
+            test%nb_elem,test%DoF,test%dx)
+
+    else
+       print*,'not recongnized time scheme'
+    end if
+
   end subroutine backward_test
+
+  subroutine extract_g(test)
+    type(t_adjoint_test),intent(inout) :: test
+
+    integer :: i
+
+    test%GP=0.0
+    test%GU=0.0
+    
+    if (test%time_scheme.eq.'LF') then
+       print*,'not possible yet for Leap Frog'
+       STOP
+
+       
+    else if (test%time_scheme.eq.'RK4') then
+       do i=1,test%n_time_step
+          call RK4_forward(test%GP(i,:),test%GU(i,:),                        &
+               test%Ap,test%Av,test%App,                                     &
+               test%FP(i-1,:),test%FP_half(i,:),test%FP(i,:),                &
+               test%FU(i-1,:),test%FU_half(i,:),test%FU(i,:))
+       end do
+
+    else if (test%time_scheme.eq.'AB3') then
+       do i=1,test%n_time_step
+          call  AB3_forward(test%GP(i,:),test%GU(i,:),test%Ap,test%Av,test%App, &
+               test%FP(i,:),test%FU(i,:),                                    &
+               test%FP(i-1,:),test%FP(i-2,:),test%FU(i-1,:),test%FU(i-2,:))
+       end do
+    else
+       print*,'not recongnized time scheme'
+    end if
+
+  end subroutine extract_g
 
   subroutine test_LF_forward(P,U,FP,FU_half,Ap,Av,App,n_time_step,       &
        size_v,nb_elem,DoF,dx)
@@ -280,36 +342,98 @@ module m_adjoint_test
 
     do i=1,n_time_step
        ! print*,'i',i
-
+       
        P_current=P(i-1,:)
        U_current=U(i-1,:)
-       call RK4_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FP_half(i,:),   &
-            FP(i,:),FU(i-1,:),FU_half(i,:),FU(i,:))
+       call RK4_forward(P_current,U_current,Ap,Av,App,                          &
+            FP(i-1,:),FP_half(i,:),   &
+            FP(i,:),FU(i-1,:),        &
+            FU_half(i,:),FU(i,:),     &
+            0.0*FP(i,:),0.0*FU(i,:))
+
+
+       ! call RK4_forward(P_current,U_current,Ap,Av,App,                          &
+       !      0.0*FP(i-1,:),0.0*FP_half(i,:),   &
+       !      0.0*FP(i,:),0.0*FU(i-1,:),        &
+       !      0.0*FU_half(i,:),0.0*FU(i,:),     &
+       !      FP(i,:),FU(i,:))
+
+       
        P(i,:)=P_current
        U(i,:)=U_current
 
     end do
- 
   end subroutine test_RK4_forward
 
-  subroutine test_RK4_backward(QP,QU,DP,DU,DP_half,DU_half,tAv,tAp,tApp, &
-                               n_time_step,size_v,nb_elem,DoF,dx)
-    real,dimension(0:n_time_step,size_v),intent(inout) :: QU
-    real,dimension(0:n_time_step,size_v),intent(inout) :: QP
-    real,dimension(0:n_time_step,size_v),intent(inout) :: DP
-    real,dimension(0:n_time_step,size_v),intent(inout) :: DU
-    real,dimension(1:n_time_step,size_v),intent(inout) :: DP_half
-    real,dimension(1:n_time_step,size_v),intent(inout) :: DU_half
-    type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
+  subroutine test_RK4_forward2(P,U,FP,FU,FP_half,FU_half,Ap,Av,App,n_time_step,&
+                                size_v,nb_elem,DoF,dx,GP,GU)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: U
+    real,dimension(0:n_time_step,size_v),intent(inout) :: P
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: GP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: GU
+    real,dimension(1:n_time_step,size_v),intent(inout) :: FP_half
+    real,dimension(1:n_time_step,size_v),intent(inout) :: FU_half
+    type(sparse_matrix),intent(in)    :: Ap,Av,App
     integer            ,intent(in)    :: n_time_step
     integer            ,intent(in)    :: size_v
     integer            ,intent(in)    :: nb_elem
     integer            ,intent(in)    :: DoF
     real               ,intent(in)    :: dx
 
+    real,dimension(size(U,2)) :: P_current,U_current
+    integer                   :: i
+    
+    P(0,:)=0.0
+    U(0,:)=0.0
+    FP(0,:)=0.0
+    FU(0,:)=0.0
+
+    do i=1,n_time_step
+       ! print*,'i',i
+       
+       P_current=P(i-1,:)
+       U_current=U(i-1,:)
+       ! call RK4_forward(P_current,U_current,Ap,Av,App,                          &
+       !      FP(i-1,:),FP_half(i,:),   &
+       !      FP(i,:),FU(i-1,:),        &
+       !      FU_half(i,:),FU(i,:),     &
+       !      0.0*FP(i,:),0.0*FU(i,:))
+
+
+       call RK4_forward(P_current,U_current,Ap,Av,App,                          &
+            0.0*FP(i-1,:),0.0*FP_half(i,:),   &
+            0.0*FP(i,:),0.0*FU(i-1,:),        &
+            0.0*FU_half(i,:),0.0*FU(i,:),     &
+            GP(i,:),GU(i,:))
+
+       
+       P(i,:)=P_current
+       U(i,:)=U_current
+
+    end do
+ 
+  end subroutine test_RK4_forward2
+
+  subroutine test_RK4_backward(QP,QU,DP,DU,tAv,tAp,tApp, &
+                               n_time_step,size_v,nb_elem,DoF,dx)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: QP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: DU
+    type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
+    integer            ,intent(in)    :: n_time_step
+    integer            ,intent(in)    :: size_v
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    real               ,intent(in)    :: dx
+    real,dimension(size_v) :: zero
     real,dimension(size(QP,2)) :: QP_current,QU_current
     integer                    :: i
-    
+
+
+    zero=0.0
     QP(n_time_step,:)=0.0
     QU(n_time_step,:)=0.0
     DP(n_time_step,:)=0.0
@@ -319,11 +443,10 @@ module m_adjoint_test
     
     do i=n_time_step-1,0,-1
        ! print*,'i',i
-
        QP_current=QP(i+1,:)
        QU_current=QU(i+1,:)
-       call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),           &
-                        DP_half(i+1,:),DP(i,:),DU(i+1,:),DU_half(i+1,:),DU(i,:))
+       call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,zero,zero,zero,zero,zero,zero,DP(i,:),DU(i,:))
+!       call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,zero,zero,zero,zero,zero,zero,DP(i+1,:),DU(i+1,:))
        QP(i,:)=QP_current
        QU(i,:)=QU_current
     end do
@@ -352,22 +475,22 @@ module m_adjoint_test
     integer                   :: i
 
 
-    P(0:2,:)=0.0
-    U(0:2,:)=0.0
-    FP(0:2,:)=0.0
-    FU(0:2,:)=0.0
+    P(0:1,:)=0.0
+    U(0:1,:)=0.0
+    FP(0:1,:)=0.0
+    FU(0:1,:)=0.0
     
     Pk1=0.0
     Pk2=0.0
     Uk1=0.0
     Uk2=0.0
     
-    do i=3,n_time_step
+    do i=2,n_time_step
        ! print*,'i',i
 
        P_current=P(i-1,:)
        U_current=U(i-1,:)
-       call AB3_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FU(i-1,:),      &
+       call AB3_forward(P_current,U_current,Ap,Av,App,FP(i,:),FU(i,:),      &
                         Pk1,Pk2,Uk1,Uk2)
        P(i,:)=P_current
        U(i,:)=U_current
@@ -398,14 +521,13 @@ module m_adjoint_test
     QUk1=0.0
     QUk2=0.0
 
-   QP(n_time_step-2:n_time_step,:)=0.0
-   QU(n_time_step-2:n_time_step,:)=0.0
-   DP(n_time_step-2:n_time_step,:)=0.0
-   DU(n_time_step-2:n_time_step,:)=0.0
+   QP(n_time_step-1:n_time_step,:)=0.0
+   QU(n_time_step-1:n_time_step,:)=0.0
+   DP(n_time_step-1:n_time_step,:)=0.0
+   DU(n_time_step-1:n_time_step,:)=0.0
      
-    do i=n_time_step-3,0,-1
-       ! print*,'i',i
-
+   do i=n_time_step-2,0,-1
+      
        QP_current=QP(i+1,:)
        QU_current=QU(i+1,:)
        call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
@@ -421,35 +543,13 @@ module m_adjoint_test
     real                           :: inner_product
     integer                        :: i,j
     integer                        :: n_time_step
-    real,dimension(size(U,2)) :: EP,EU
-    real :: b0,b1,b2,b3
 
-    b0=55.0/24.0
-    b1=-59.0/24.0
-    b2=37.0/24.0
-    b3=-9.0/24.0
-    
     n_time_step=size(U,1)
     inner_product=0.0
 
     
     do i=1,n_time_step
-
-       
-    ! EP=b0*DP(i,:)       &
-    !      +b1*DP(i-1,:)  &
-    !      +b2*DP(i-2,:)  &
-    !      +b3*DP(i-3,:)
-
-    ! EU=b0*DU(i,:)       &
-    !      +b1*DU(i-1,:)  &
-    !      +b2*DU(i-2,:)  &
-    !      +b3*DU(i-3,:)
-
-
-       
        do j=1,size(U,2)
-         !           inner_product=inner_product+U(i,j)*EU(j)+P(i,j)*EP(j)
           inner_product=inner_product+P(i,j)*DP(i,j)+U(i,j)*DU(i,j)
        end do
     end do
