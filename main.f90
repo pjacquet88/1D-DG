@@ -106,7 +106,7 @@ program main!
   dt=forward%dt
   dx=forward%dx
   n_adjoint_time_step=200!forward%n_time_step
-  
+
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
 
@@ -186,15 +186,9 @@ program main!
   call extract_g(test)
   call forward_test2(test)
   print*,'inner product2 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
-
-
-  
   call backward_test(test)
-  print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
-  ! print*,'inner product QPQU/FUFP',inner_product(test%FP,test%FU,test%QP,test%QU)
-  ! print*,'inner product QPQU/FUFP',inner_product(test%GP,test%GU,test%QP,test%QU)
-  
-!  print*,'Difference :',inner_product(test%P,test%U,test%DP,test%DU)-inner_product(test%FP,test%FU,test%QP,test%QU)
+  print*,'inner product GPGU/QPQU',inner_product(test%GP,test%GU,test%QP,test%QU)
+  print*,'inner product FPFU/QPQU',inner_product(test%FP,test%FU,test%QP,test%QU)
   
   call cpu_time(t3)
 

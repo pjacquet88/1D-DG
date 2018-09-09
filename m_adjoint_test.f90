@@ -116,27 +116,41 @@ module m_adjoint_test
        end do
     end do
 
-    do i=0,n_time_step
-       test%FP(i,:)=i!real(i/n_time_step)-0.5
-       test%FU(i,:)=i!real(i/n_time_step)-0.5
-    end do
-
-    do i=1,n_time_step
-       test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-       test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-    end do
+    
+    if (test%time_scheme.eq.'RK4') then
+       test%FP(0,:)=0.0
+       test%FU(0,:)=0.0
+       test%DP(n_time_step,:)=0.0
+       test%DU(n_time_step,:)=0.0
+    else if (test%time_scheme.eq.'AB3') then
+       test%FP(0:2,:)=0.0
+       test%FU(0:2,:)=0.0
+       test%DP(n_time_step:n_time_step-2,:)=0.0
+       test%DU(n_time_step:n_time_step-2,:)=0.0
+    end if
 
     
-    do i=0,n_time_step
-       test%DP(i,:)=n_time_step-i!real(i/n_time_step)-0.5
-       test%DU(i,:)=n_time_step-i!real(i/n_time_step)-0.5
-    end do
+    ! do i=0,n_time_step
+    !    test%FP(i,:)=i!real(i/n_time_step)-0.5
+    !    test%FU(i,:)=i!real(i/n_time_step)-0.5
+    ! end do
 
-    do i=1,n_time_step
-       test%DP_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
-       test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
-    end do
+    ! do i=1,n_time_step
+    !    test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    !    test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    ! end do
 
+    
+    ! do i=0,n_time_step
+    !    test%DP(i,:)=n_time_step-i!real(i/n_time_step)-0.5
+    !    test%DU(i,:)=n_time_step-i!real(i/n_time_step)-0.5
+    ! end do
+
+    ! do i=1,n_time_step
+    !    test%DP_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
+    !    test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
+    ! end do
+ 
   end subroutine init_adjoint_test
 
   
@@ -434,19 +448,18 @@ module m_adjoint_test
 
 
     zero=0.0
+
     QP(n_time_step,:)=0.0
     QU(n_time_step,:)=0.0
     DP(n_time_step,:)=0.0
-    !DP_half(n_time_step,:)=0.0
-    DU(n_time_step,:)=0.0
-    !DU_half(n_time_step,:)=0.0
+    DU(n_time_step,:)=0.0   
     
     do i=n_time_step-1,0,-1
        ! print*,'i',i
        QP_current=QP(i+1,:)
        QU_current=QU(i+1,:)
        call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,zero,zero,zero,zero,zero,zero,DP(i,:),DU(i,:))
-!       call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,zero,zero,zero,zero,zero,zero,DP(i+1,:),DU(i+1,:))
+    !   call RK4_forward(QP_current,QU_current,tAv,tAp,tApp,zero,zero,zero,zero,zero,zero,DP(i+1,:),DU(i+1,:))
        QP(i,:)=QP_current
        QU(i,:)=QU_current
     end do
