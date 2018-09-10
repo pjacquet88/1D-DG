@@ -80,20 +80,72 @@ module m_time_scheme
   end subroutine RK4_forward
 
 
-  subroutine AB3_forward(P,U,Ap,Av,App,FP,FU,Pk1,Pk2,Uk1,Uk2)
+  ! subroutine AB3_forward(P,U,Ap,Av,App,FP,FU,Pk1,Pk2,Uk1,Uk2,GP,GU)
+  !   real,dimension(:)  ,intent(inout) :: P
+  !   real,dimension(:)  ,intent(inout) :: U
+  !   type(sparse_matrix),intent(in)    :: Ap
+  !   type(sparse_matrix),intent(in)    :: Av
+  !   type(sparse_matrix),intent(in)    :: App
+  !   real,dimension(:)  ,intent(in)    :: FP,FU
+  !   real,dimension(:)  ,intent(inout) :: Pk1,Pk2
+  !   real,dimension(:)  ,intent(inout) :: Uk1,Uk2
+  !   real,dimension(:),optional        :: GP,GU
+    
+  !   real,dimension(size(P)) :: Pk0,Uk0
+    
+  !   if ((present(GP)).and.(present(GU))) then
+  !      Uk0=-sparse_matmul(Av,P)
+  !      Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)
+  !   else
+  !      Uk0=-sparse_matmul(Av,P)-FU
+  !      Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)-FP
+  !   end if
+
+  !   P=P+23.0/12.0*Pk0         &
+  !      -16.0/12.0*Pk1         &
+  !      +5.0/12.0*Pk2
+
+  !   U=U+23.0/12.0*Uk0         &
+  !      -16.0/12.0*Uk1         &
+  !      +5.0/12.0*Uk2
+
+  !   Pk2=Pk1
+  !   Uk2=Uk1
+  !   Pk1=Pk0
+  !   Uk1=Uk0
+
+  !   if ((present(GP)).and.(present(GU))) then
+  !      P=P+GP
+  !      U=U+GU
+  !   end if
+    
+  !   end subroutine AB3_forward
+
+  subroutine AB3_forward(P,U,Ap,Av,App,FP0,FU0,FP1,FU1,FP2,FU2,                 &
+                         Pk1,Pk2,Uk1,Uk2,GP,GU)
     real,dimension(:)  ,intent(inout) :: P
     real,dimension(:)  ,intent(inout) :: U
     type(sparse_matrix),intent(in)    :: Ap
     type(sparse_matrix),intent(in)    :: Av
     type(sparse_matrix),intent(in)    :: App
-    real,dimension(:)  ,intent(in)    :: FP,FU
+    real,dimension(:)  ,intent(in)    :: FP0,FU0
+    real,dimension(:)  ,intent(in)    :: FP1,FU1
+    real,dimension(:)  ,intent(in)    :: FP2,FU2
     real,dimension(:)  ,intent(inout) :: Pk1,Pk2
     real,dimension(:)  ,intent(inout) :: Uk1,Uk2
-    
-    real,dimension(size(P)) :: Pk0,Uk0
+    real,dimension(:),optional        :: GP,GU
 
-    Uk0=-sparse_matmul(Av,P)-FU
-    Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)-FP
+    real,dimension(size(P)) :: Pk0
+    real,dimension(size(U)) :: Uk0
+    real :: b0,b1,b2
+
+    if ((present(GP)).and.(present(GU))) then
+       Uk0=-sparse_matmul(Av,P)
+       Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)
+    else
+       Uk0=-sparse_matmul(Av,P)-FU0
+       Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)-FP0
+    end if
 
     P=P+23.0/12.0*Pk0         &
        -16.0/12.0*Pk1         &
@@ -107,6 +159,40 @@ module m_time_scheme
     Uk2=Uk1
     Pk1=Pk0
     Uk1=Uk0
-    end subroutine AB3_forward
+
+    if ((present(GP)).and.(present(GU))) then
+       P=P+GP
+       U=U+GU
+    end if
+    
+
+    ! b0=23.0/12.0
+    ! b1=-16.0/12.0
+    ! b2=5.0/12.0
+
+    ! Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)
+    ! Uk0=-sparse_matmul(Av,P)
+
+    ! P=P+b0*Pk0         &
+    !    +b1*Pk1         &
+    !    +b2*Pk2
+
+    ! U=U+b0*Uk0         &
+    !    +b1*Uk1         &
+    !    +b2*Uk2
+
+    ! Pk2=Pk1
+    ! Uk2=Uk1
+    ! Pk1=Pk0
+    ! Uk1=Uk0
+
+    ! if ((present(GP)).and.(present(GU))) then
+    !    P=P+GP
+    !    U=U+GU
+    ! else
+    !     P=P-b0*FP0-b1*FP1-b2*FP2
+    !     U=U-b0*FU0-b1*FU1-b2*FU2
+    ! end if
+  end subroutine AB3_forward
   
 end module m_time_scheme

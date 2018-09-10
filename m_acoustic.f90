@@ -949,7 +949,9 @@ contains
     type(acoustic_problem),intent(inout) :: problem
     real,                  intent(in)    :: t
 
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv,RHSp
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSv0,RHSp0
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSv1,RHSp1
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSv2,RHSp2
     real,dimension(problem%DoF*problem%nb_elem) :: U1,U2,U3,U4
     real,dimension(problem%DoF*problem%nb_elem) :: P1,P2,P3,P4
     real                                        :: gd,gg
@@ -977,10 +979,30 @@ contains
 
     else if (problem%time_scheme.eq.'AB3') then
 
-       call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
+       !call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
 
+       ! call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+       !                  RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
+
+       RHSp0=0.0
+       RHSv0=0.0
+       RHSp1=0.0
+       RHSv1=0.0
+       RHSp2=0.0
+       RHSv2=0.0
+       
+       call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
+       call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
+       call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
+       
        call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-                        RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
+                      RHSp0,RHSv0,                                              &
+                      RHSp1,RHSv1,                                              &
+                      RHSp2,RHSv2,                                              &
+                      problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
+
+
+       
     end if
   end subroutine one_time_step
 
@@ -1025,12 +1047,12 @@ contains
        close(23)
     end if
     
-    if (problem%forward) then
-       do i=0,problem%n_time_step
-          t=i*problem%dt
-          write(25,*) t,eval_backward_signal(problem%receiver,t,problem%final_time)
-       end do
-    end if
+    ! if (problem%forward) then
+    !    do i=0,problem%n_time_step
+    !       t=i*problem%dt
+    !       write(25,*) t,eval_backward_signal(problem%receiver,t,problem%final_time)
+    !    end do
+    ! end if
   end subroutine all_time_step
 
   subroutine free_acoustic_problem(problem)
@@ -1177,22 +1199,28 @@ contains
     f0=2.5
 
     last_node=problem%DoF*problem%nb_elem
-    
-    if (problem%boundaries.eq.'dirichlet') then
-       gg=min(0.5*t,0.5)
-       gd=-gg
-       RHSv(1)=gg*(-1.0+0.0*problem%alpha)
-       RHSv(last_node)=gd*(1.0-0.0*problem%alpha)
-    end if
 
-    if (problem%signal.eq.'flat') then
-       if (problem%forward) then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
-       else
-          gg=eval_backward_signal(problem%receiver_signal,t,problem%final_time)
-          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
-          RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
+    if (t.le.0.0) then
+       RHSp=0.0
+       RHSv=0.0
+    else
+
+       if (problem%boundaries.eq.'dirichlet') then
+          gg=min(0.5*t,0.5)
+          gd=-gg
+          RHSv(1)=gg*(-1.0+0.0*problem%alpha)
+          RHSv(last_node)=gd*(1.0-0.0*problem%alpha)
+       end if
+
+       if (problem%signal.eq.'flat') then
+          if (problem%forward) then
+             gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+             RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+          else
+             gg=eval_backward_signal(problem%receiver_signal,t,problem%final_time)
+             ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+             RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
+          end if
        end if
     end if
 

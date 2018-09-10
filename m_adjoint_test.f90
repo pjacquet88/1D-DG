@@ -123,22 +123,28 @@ module m_adjoint_test
        test%DP(n_time_step,:)=0.0
        test%DU(n_time_step,:)=0.0
     else if (test%time_scheme.eq.'AB3') then
-       test%FP(0:2,:)=0.0
-       test%FU(0:2,:)=0.0
-       test%DP(n_time_step:n_time_step-2,:)=0.0
-       test%DU(n_time_step:n_time_step-2,:)=0.0
+       ! test%FP(0:1,:)=0.0
+       ! test%FU(0:1,:)=0.0
+       ! test%DP(n_time_step:n_time_step-1,:)=0.0
+       ! test%DU(n_time_step:n_time_step-1,:)=0.0
+       
+       ! test%FP(0,:)=0.0
+       ! test%FU(0,:)=0.0
+       ! test%DP(n_time_step,:)=0.0
+       ! test%DU(n_time_step,:)=0.0
+       
     end if
 
     
-    ! do i=0,n_time_step
-    !    test%FP(i,:)=i!real(i/n_time_step)-0.5
-    !    test%FU(i,:)=i!real(i/n_time_step)-0.5
-    ! end do
+    do i=0,n_time_step
+       test%FP(i,:)=i!real(i/n_time_step)-0.5
+       test%FU(i,:)=i!real(i/n_time_step)-0.5
+    end do
 
-    ! do i=1,n_time_step
-    !    test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-    !    test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-    ! end do
+    do i=1,n_time_step
+       test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+       test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    end do
 
     
     ! do i=0,n_time_step
@@ -150,7 +156,7 @@ module m_adjoint_test
     !    test%DP_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
     !    test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
     ! end do
- 
+    
   end subroutine init_adjoint_test
 
   
@@ -183,32 +189,33 @@ module m_adjoint_test
   end subroutine forward_test
 
     subroutine forward_test2(test)
-    type(t_adjoint_test),intent(inout) :: test
+      type(t_adjoint_test),intent(inout) :: test
+      integer :: i
 
     
     call extract_g(test)
 
     if (test%time_scheme.eq.'LF') then
        call test_LF_forward(test%P,test%U,test%FP,test%FU_half,test%Ap,test%Av, &
-            test%App,test%n_time_step,test%size_v,test%nb_elem, &
+            test%App,test%n_time_step,test%size_v,test%nb_elem,                 &
             test%DoF,test%dx)
 
 
     else if (test%time_scheme.eq.'RK4') then
-       call test_RK4_forward2(test%P,test%U,test%GP,test%GU,test%FP_half,        &
-            test%FU_half,test%Ap,test%Av,test%App,             &
-            test%n_time_step,test%size_v,test%nb_elem,test%DoF,&
+       call test_RK4_forward2(test%P,test%U,test%GP,test%GU,test%FP_half,       &
+            test%FU_half,test%Ap,test%Av,test%App,                              &
+            test%n_time_step,test%size_v,test%nb_elem,test%DoF,                 &
             test%dx,test%GP,test%GU)
 
 
     else if (test%time_scheme.eq.'AB3') then
-       call  test_AB3_forward(test%P,test%U,test%FP,test%FU,test%Ap,test%Av,    &
-            test%App,test%n_time_step,test%size_v,            &
-            test%nb_elem,test%DoF,test%dx)
-
+       call  test_AB3_forward2(test%P,test%U,test%FP,test%FU,test%Ap,test%Av,   &
+            test%App,test%n_time_step,test%size_v,                              &
+            test%nb_elem,test%DoF,test%dx,test%GP,test%GU)
     else
        print*,'not recongnized time scheme'
     end if
+
 
   end subroutine forward_test2
      
@@ -227,7 +234,7 @@ module m_adjoint_test
     else if (test%time_scheme.eq.'AB3') then
        call test_AB3_backward(test%QP,test%QU,test%DP,test%DU,test%tAv,test%tAp,&
             test%tApp,test%n_time_step,test%size_v,            &
-            test%nb_elem,test%DoF,test%dx)
+            test%nb_elem,test%DoF,test%dx,test%GP,test%GU)
 
     else
        print*,'not recongnized time scheme'
@@ -238,30 +245,58 @@ module m_adjoint_test
   subroutine extract_g(test)
     type(t_adjoint_test),intent(inout) :: test
 
+    real,dimension(size(test%P,2)) :: Pk1,Pk2
+    real,dimension(size(test%P,2)) :: Uk1,Uk2
     integer :: i
-
+    real,dimension(size(test%P,2)) :: zero
+    zero=0.0
     test%GP=0.0
     test%GU=0.0
-    
+
     if (test%time_scheme.eq.'LF') then
        print*,'not possible yet for Leap Frog'
        STOP
 
-       
+
     else if (test%time_scheme.eq.'RK4') then
        do i=1,test%n_time_step
-          call RK4_forward(test%GP(i,:),test%GU(i,:),                        &
-               test%Ap,test%Av,test%App,                                     &
-               test%FP(i-1,:),test%FP_half(i,:),test%FP(i,:),                &
+          call RK4_forward(test%GP(i,:),test%GU(i,:),                           &
+               test%Ap,test%Av,test%App,                                        &
+               test%FP(i-1,:),test%FP_half(i,:),test%FP(i,:),                   &
                test%FU(i-1,:),test%FU_half(i,:),test%FU(i,:))
        end do
 
     else if (test%time_scheme.eq.'AB3') then
-       do i=1,test%n_time_step
+
+       Pk1=0.0
+       Pk2=0.0
+       Uk1=0.0
+       Uk2=0.0
+
+       call  AB3_forward(test%GP(0,:),test%GU(0,:),test%Ap,test%Av,test%App, &
+                         test%FP(0,:),test%FU(0,:),                             &
+                         zero,zero,                                             &
+                         zero,zero,                                             &
+                         Pk1,Pk2,Uk1,Uk2)
+       
+       
+       call  AB3_forward(test%GP(1,:),test%GU(1,:),test%Ap,test%Av,test%App, &
+                         test%FP(1,:),test%FU(1,:),                             &
+                         test%FP(0,:),test%FU(0,:),                             &
+                         zero,zero,                                             &
+                         Pk1,Pk2,Uk1,Uk2)
+
+
+       
+       do i=2,test%n_time_step
           call  AB3_forward(test%GP(i,:),test%GU(i,:),test%Ap,test%Av,test%App, &
-               test%FP(i,:),test%FU(i,:),                                    &
-               test%FP(i-1,:),test%FP(i-2,:),test%FU(i-1,:),test%FU(i-2,:))
+                            test%FP(i,:),test%FU(i,:),                          &
+                            test%FP(i-1,:),test%FU(i-1,:),                      &
+                            test%FP(i-2,:),test%FU(i-2,:),                      &
+                            Pk1,Pk2,Uk1,Uk2)
        end do
+
+       
     else
        print*,'not recongnized time scheme'
     end if
@@ -472,8 +507,8 @@ module m_adjoint_test
                               DoF,dx)
     real,dimension(0:n_time_step,size_v),intent(inout) :: U
     real,dimension(0:n_time_step,size_v),intent(inout) :: P
-    real,dimension(0:n_time_step,size_v),intent(inout)    :: FP
-    real,dimension(0:n_time_step,size_v),intent(inout)    :: FU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: FU
     
     type(sparse_matrix),intent(in)    :: Ap,Av,App
     integer            ,intent(in)    :: n_time_step
@@ -485,37 +520,138 @@ module m_adjoint_test
     real,dimension(size(U,2)) :: P_current,U_current
     real,dimension(size(U,2)) :: Pk1,Pk2
     real,dimension(size(U,2)) :: Uk1,Uk2
+    real,dimension(size(U,2)) :: zero
     integer                   :: i
 
 
-    P(0:1,:)=0.0
-    U(0:1,:)=0.0
-    FP(0:1,:)=0.0
-    FU(0:1,:)=0.0
-    
     Pk1=0.0
     Pk2=0.0
     Uk1=0.0
     Uk2=0.0
+    zero=0.0
+
+    P_current=P(0,:)
+    U_current=U(0,:)
+    call  AB3_forward(P_current,U_current,Ap,Av,App,             &
+                      FP(0,:),FU(0,:),                                &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      Pk1,Pk2,Uk1,Uk2)
+    P(1,:)=P_current
+    U(1,:)=U_current
+
+    P_current=P(1,:)
+    U_current=U(1,:)
+    call  AB3_forward(P_current,U_current,Ap,Av,App,             &
+                      FP(1,:),FU(1,:),                                &
+                      FP(0,:),FU(0,:),                                &
+                      zero,zero,                                                &
+                      Pk1,Pk2,Uk1,Uk2)
+    P(2,:)=P_current
+    U(2,:)=U_current
+
+
+    
+    do i=3,n_time_step
+       ! print*,'i',i
+
+       P_current=P(i-1,:)
+       U_current=U(i-1,:)
+       call  AB3_forward(P_current,U_current,Ap,Av,App,          &
+                            FP(i-1,:),FU(i-1,:),                          &
+                            FP(i-2,:),FU(i-2,:),                      &
+                            FP(i-3,:),FU(i-3,:),                      &
+                            Pk1,Pk2,Uk1,Uk2)
+       P(i,:)=P_current
+       U(i,:)=U_current
+    end do
+  end subroutine test_AB3_forward
+
+  subroutine test_AB3_forward2(P,U,FP,FU,Ap,Av,App,n_time_step,size_v,nb_elem,  &
+                               DoF,dx,GP,GU)
+    real,dimension(0:n_time_step,size_v),intent(inout) :: U
+    real,dimension(0:n_time_step,size_v),intent(inout) :: P
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: FP
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: FU
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: GP
+    real,dimension(0:n_time_step,size_v),intent(inout)    :: GU
+    
+    type(sparse_matrix),intent(in)    :: Ap,Av,App
+    integer            ,intent(in)    :: n_time_step
+    integer            ,intent(in)    :: size_v
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    real               ,intent(in)    :: dx
+
+    real,dimension(size(U,2)) :: P_current,U_current
+    real,dimension(size(U,2)) :: Pk1,Pk2
+    real,dimension(size(U,2)) :: Uk1,Uk2
+    real,dimension(size(U,2)) :: zero
+    integer                   :: i
+
+    Pk1=0.0
+    Pk2=0.0
+    Uk1=0.0
+    Uk2=0.0
+    zero=0.0
+
+    P_current=P(0,:)
+    U_current=U(0,:)
+    call  AB3_forward(P_current,U_current,Ap,Av,App,             &
+                      zero,zero,                                 &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      Pk1,Pk2,Uk1,Uk2,GP(0,:),GU(0,:))
+    P(1,:)=P_current
+    U(1,:)=U_current
+
+    P_current=P(1,:)
+    U_current=U(1,:)
+    call  AB3_forward(P_current,U_current,Ap,Av,App,             &
+                      zero,zero,                                 &   
+                      zero,zero,                                 &  
+                      zero,zero,                                                &
+                      Pk1,Pk2,Uk1,Uk2,GP(1,:),GU(1,:))
+    P(2,:)=P_current
+    U(2,:)=U_current
+
+
     
     do i=2,n_time_step
        ! print*,'i',i
 
        P_current=P(i-1,:)
        U_current=U(i-1,:)
-       call AB3_forward(P_current,U_current,Ap,Av,App,FP(i,:),FU(i,:),      &
-                        Pk1,Pk2,Uk1,Uk2)
+       call  AB3_forward(P_current,U_current,Ap,Av,App,          &
+                         zero,zero,                          &
+                         zero,zero,                          &
+                         zero,zero,                          &
+                         Pk1,Pk2,Uk1,Uk2,GP(i-1,:),GU(i-1,:))
        P(i,:)=P_current
        U(i,:)=U_current
     end do
-  end subroutine test_AB3_forward
+    
+    ! do i=1,n_time_step
+    !    ! print*,'i',i
+
+    !    P_current=P(i-1,:)
+    !    U_current=U(i-1,:)
+    !    call AB3_forward(P_current,U_current,Ap,Av,App,FP(i-1,:),FU(i-1,:),      &
+    !                     Pk1,Pk2,Uk1,Uk2,GP(i-1,:),GU(i-1,:))
+    !    P(i,:)=P_current
+    !    U(i,:)=U_current
+    ! end do
+  end subroutine test_AB3_forward2
+
 
   subroutine test_AB3_backward(QP,QU,DP,DU,tAv,tAp,tApp,n_time_step,size_v,     &
-                               nb_elem,DoF,dx)
+                               nb_elem,DoF,dx,GP,GU)
     real,dimension(0:n_time_step,size_v),intent(inout) :: QU
     real,dimension(0:n_time_step,size_v),intent(inout) :: QP
     real,dimension(0:n_time_step,size_v),intent(inout) :: DP
     real,dimension(0:n_time_step,size_v),intent(inout) :: DU
+    real,dimension(0:n_time_step,size_v),intent(inout) :: GP
+    real,dimension(0:n_time_step,size_v),intent(inout) :: GU
     
     type(sparse_matrix),intent(in)    :: tAp,tAv,tApp
     integer            ,intent(in)    :: n_time_step
@@ -527,27 +663,71 @@ module m_adjoint_test
     real,dimension(size(QU,2)) :: QP_current,QU_current
     real,dimension(size(QU,2)) :: QPk1,QPk2
     real,dimension(size(QU,2)) :: QUk1,QUk2
+    real,dimension(size(QU,2)) :: zero
     integer                    :: i
 
     QPk1=0.0
     QPk2=0.0
     QUk1=0.0
     QUk2=0.0
+    zero=0.0
 
-   QP(n_time_step-1:n_time_step,:)=0.0
-   QU(n_time_step-1:n_time_step,:)=0.0
-   DP(n_time_step-1:n_time_step,:)=0.0
-   DU(n_time_step-1:n_time_step,:)=0.0
-     
-   do i=n_time_step-2,0,-1
-      
+    QP_current=QP(n_time_step,:)
+    QU_current=QU(n_time_step,:)
+    call  AB3_forward(QP_current,QU_current,tAv,tAp,tApp,        &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      QPk1,QPk2,QUk1,QUk2,                                      &
+                      DP(n_time_step,:),DU(n_time_step,:))
+    QP(n_time_step-1,:)=QP_current
+    QU(n_time_step-1,:)=QU_current
+
+    QP_current=QP(n_time_step-1,:)
+    QU_current=QU(n_time_step-1,:)
+    call  AB3_forward(QP_current,QU_current,tAv,tAp,tApp,        &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      zero,zero,                                                &
+                      QPk1,QPk2,QUk1,QUk2,                                      &
+                      DP(n_time_step-1,:),DU(n_time_step-1,:))
+    QP(n_time_step-2,:)=QP_current
+    QU(n_time_step-2,:)=QU_current
+
+
+    
+    do i=n_time_step-3,0,-1
+       ! print*,'i',i
+
        QP_current=QP(i+1,:)
        QU_current=QU(i+1,:)
-       call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
-                        QPk1,QPk2,QUk1,QUk2)
+       call  AB3_forward(QP_current,QU_current,tAv,tAp,tApp,          &
+                            zero,zero,                                &
+                            zero,zero,                                &
+                            zero,zero,                                &
+                            QPk1,QPk2,QUk1,QUk2,                      &
+                            DP(i+1,:),DU(i+1,:) )
        QP(i,:)=QP_current
        QU(i,:)=QU_current
     end do
+    
+
+!    QP(n_time_step-1:n_time_step,:)=0.0
+!    QU(n_time_step-1:n_time_step,:)=0.0
+!    ! DP(n_time_step-1:n_time_step,:)=0.0
+!    ! DU(n_time_step-1:n_time_step,:)=0.0
+     
+!    do i=n_time_step-1,0,-1
+      
+!        QP_current=QP(i+1,:)
+!        QU_current=QU(i+1,:)
+!        call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
+!             QPk1,QPk2,QUk1,QUk2)
+! !        call AB3_forward(QP_current,QU_current,tAv,tAp,tApp,DP(i+1,:),DU(i+1,:), &
+! !                       QPk1,QPk2,QUk1,QUk2,GP(i+1,:),GU(i+1,:))
+!        QP(i,:)=QP_current
+!        QU(i,:)=QU_current
+!    end do
   end subroutine test_AB3_backward
 
   function inner_product(P,U,DP,DU)

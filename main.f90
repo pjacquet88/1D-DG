@@ -11,7 +11,7 @@ program main!
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=0.1       ! final time
+  real            ,parameter :: final_time=0.1      ! final time
   character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
@@ -105,7 +105,7 @@ program main!
   App=forward%App
   dt=forward%dt
   dx=forward%dx
-  n_adjoint_time_step=200!forward%n_time_step
+  n_adjoint_time_step=5!forward%n_time_step
 
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
@@ -119,7 +119,7 @@ program main!
      else
         call system('cp receiver.dat data.dat')
      end if
-  end if
+   end if
   
   call cpu_time(t1)
   
@@ -188,7 +188,10 @@ program main!
   print*,'inner product2 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
   call backward_test(test)
   print*,'inner product GPGU/QPQU',inner_product(test%GP,test%GU,test%QP,test%QU)
-  print*,'inner product FPFU/QPQU',inner_product(test%FP,test%FU,test%QP,test%QU)
+
+  print*,'%%%%%%%%%%%'
+  print*,'%%% Adjoint test difference :',abs((inner_product(test%P,test%U,test%DP,test%DU)-inner_product(test%GP,test%GU,test%QP,test%QU))/inner_product(test%GP,test%GU,test%QP,test%QU))
+  print*,'%%%%%%%%%%%'
   
   call cpu_time(t3)
 
