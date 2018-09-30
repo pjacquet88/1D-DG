@@ -1,5 +1,5 @@
 *.dat
-animate.gif
+*.gif
 fichier
 *.mod
 *.o
@@ -7,3 +7,4 @@ fort.*
 run
 *~
 #*
+*.script
