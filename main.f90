@@ -11,20 +11,20 @@ program main!
   integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=0.1      ! final time
-  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
+  real            ,parameter :: final_time=0.1       ! final time
+  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
   logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! iter max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
-  integer         ,parameter :: n_frame=10           ! nb of times where sol. is saved
+  integer         ,parameter :: n_frame=200          ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
   integer         ,parameter :: receiver_loc=2       ! location of the receiver(elemts)
   
   real,dimension(1)          :: velocity ! velocity model change the size to change the model 
-  real,dimension(3)          :: density  ! density model change the size to change the model
+  real,dimension(1)          :: density  ! density model change the size to change the model
   !******************************************************************************
   
 
@@ -54,6 +54,8 @@ program main!
   type(sparse_matrix)  :: Ap
   type(sparse_matrix)  :: Av
   type(sparse_matrix)  :: App
+  type(sparse_matrix)  :: M
+  type(sparse_matrix)  :: Minv
   real                 :: dt
   real                 :: dx
   integer              :: n_adjoint_time_step
@@ -103,9 +105,11 @@ program main!
   Ap=forward%Ap
   Av=forward%Av
   App=forward%App
+  M=forward%M
+  Minv=forward%Minv
   dt=forward%dt
   dx=forward%dx
-  n_adjoint_time_step=5!forward%n_time_step
+  n_adjoint_time_step=200!forward%n_time_step
 
   call print_sol(forward,0)
   call all_time_step(forward,sortie)
@@ -180,23 +184,38 @@ program main!
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
   
-  call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,nb_elem,DoF,dx)
+  call init_adjoint_test(test,n_adjoint_time_step,time_scheme,dt,Ap,Av,App,M,Minv,nb_elem,DoF,dx)
   call forward_test(test)
-  print*,'inner product1 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
+  print*,'inner product UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
   call extract_g(test)
-  call forward_test2(test)
-  print*,'inner product2 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
+  ! call forward_test2(test)
+  ! print*,'inner product2 UP/DUDP',inner_product(test%P,test%U,test%DP,test%DU)
   call backward_test(test)
   print*,'inner product GPGU/QPQU',inner_product(test%GP,test%GU,test%QP,test%QU)
 
   print*,'%%%%%%%%%%%'
   print*,'%%% Adjoint test difference :',abs((inner_product(test%P,test%U,test%DP,test%DU)-inner_product(test%GP,test%GU,test%QP,test%QU))/inner_product(test%GP,test%GU,test%QP,test%QU))
   print*,'%%%%%%%%%%%'
+
   
+  print*,'inner product M UP/DUDP',inner_product_M(test%P,test%U,test%DP,test%DU,test%M)
+  print*,'inner product M GPGU/QPQU',inner_product_M(test%GP,test%GU,test%QP,test%QU,test%M)
+    print*,'%%%%%%%%%%%'
+  print*,'%%% Adjoint test difference :',abs((inner_product_M(test%P,test%U,test%DP,test%DU,test%M)-inner_product_M(test%GP,test%GU,test%QP,test%QU,M))/inner_product_M(test%GP,test%GU,test%QP,test%QU,M))
+  print*,'%%%%%%%%%%%'
   call cpu_time(t3)
-
-
   
+  do i=0,test%n_time_step
+     write(24,*) "%%%%%%%%%%", i, '%%%%%%%%%%%%%'
+     write(24,*) test%P(i,:)
+  end do
+
+  do i=test%n_time_step,0,-1
+     write(25,*) "%%%%%%%%%%", i, '%%%%%%%%%%%%%'
+     write(25,*) test%QP(i,:)
+  end do
+
+
   print*,'%%%%%%%%%%% END PROGRAM %%%%%%%%%%%%%%%%%%%%%%'
   print*,'Total time = ',t2-t0,'s'
   print*,'Forward time = ',t1-t0,'s'

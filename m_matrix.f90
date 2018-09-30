@@ -10,10 +10,17 @@ module m_matrix
      integer,dimension(:),allocatable :: JA
   end type sparse_matrix
 
+
   public  :: sparse_matrix,                                                     &
              LU_inv,                                                            &
              init_sparse_matrix,get_NNN,Full2Sparse,print_sparse_matrix,        &
-             sparse_matmul,is_sym,free_sparse_matrix
+             sparse_matmul,is_sym,free_sparse_matrix,sparse_MV,sparse_MM
+
+    interface sparse_matmul
+     module procedure sparse_MV
+     module procedure sparse_MM
+  end interface sparse_matmul
+
 
 contains
 
@@ -156,20 +163,32 @@ contains
   end subroutine transpose_sparse
 
 
-  function sparse_matmul(A,X)
+  function sparse_MV(A,X)
     type(sparse_matrix),intent(in) :: A
     real,dimension(:)  ,intent(in) :: X
-    real,dimension(size(X))        :: sparse_matmul
+    real,dimension(size(X))        :: sparse_MV
     integer                        :: i,j
 
-    sparse_matmul=0.0
+    sparse_MV=0.0
     do i=1,A%nb_ligne
        do j=A%IA(i-1)+1,A%IA(i)
-          sparse_matmul(i)=sparse_matmul(i)+A%Values(j)*X(A%JA(j))
+          sparse_MV(i)=sparse_MV(i)+A%Values(j)*X(A%JA(j))
        end do
     end do
-  end function sparse_matmul
+  end function sparse_MV
 
+  function sparse_MM(A,B)
+    type(sparse_matrix),intent(in)  :: A
+    type(sparse_matrix),intent(in)  :: B
+    type(sparse_matrix)             :: sparse_MM
+    real,dimension(:,:),allocatable :: A_full,B_full,C_full
+
+    call Sparse2Full(A,A_full)
+    call Sparse2Full(B,B_full)
+    C_full=matmul(A_full,B_full)
+    call Full2Sparse(C_full,sparse_MM)
+
+  end function sparse_MM
 
 
   !************ TEST FUNCTIONS  *************************************************

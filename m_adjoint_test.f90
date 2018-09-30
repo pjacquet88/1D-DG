@@ -21,6 +21,8 @@ module m_adjoint_test
      type(sparse_matrix)             :: Ap,tAp
      type(sparse_matrix)             :: Av,tAv
      type(sparse_matrix)             :: App,tApp
+     type(sparse_matrix)             :: M
+     type(sparse_matrix)             :: Minv
 
      integer                         :: nb_elem
      integer                         :: DoF
@@ -32,7 +34,7 @@ module m_adjoint_test
   
 
     subroutine init_adjoint_test(test,n_time_step,time_scheme,dt,Ap,Av,App,       &
-         nb_elem,DoF,dx)
+         M,Minv,nb_elem,DoF,dx)
     type(t_adjoint_test),intent(inout) :: test
     integer             ,intent(in)    :: n_time_step
     character(len=*)    ,intent(in)    :: time_scheme
@@ -40,12 +42,14 @@ module m_adjoint_test
     type(sparse_matrix) ,intent(in)    :: Ap
     type(sparse_matrix) ,intent(in)    :: Av
     type(sparse_matrix) ,intent(in)    :: App
+    type(sparse_matrix) ,intent(in)    :: M
+    type(sparse_matrix) ,intent(in)    :: Minv
     integer             ,intent(in)    :: nb_elem
     integer             ,intent(in)    :: DoF
     real                ,intent(in)    :: dx
 
     integer :: i,j
-    real,dimension(:,:),allocatable :: Ap_full,tAp_full,ttAp_full
+    type(sparse_matrix) :: Id
 
     test%size_v=size(Ap%IA)-1
     test%n_time_step=n_time_step
@@ -60,7 +64,16 @@ module m_adjoint_test
     test%nb_elem=nb_elem
     test%DoF=DoF
     test%dx=dx
+    test%M=M
+    test%Minv=Minv
 
+    test%tApp=sparse_matmul(test%tApp,test%M)
+    test%tAp=sparse_matmul(test%tAp,test%M)
+    test%tAv=sparse_matmul(test%tAv,test%M)
+
+    test%tApp=sparse_matmul(test%Minv,test%tApp)
+    test%tAp=sparse_matmul(test%Minv,test%tAp)
+    test%tAv=sparse_matmul(test%Minv,test%tAv)
 
     
     allocate(test%P(0:n_time_step,test%size_v),test%P2(0:n_time_step,test%size_v))
@@ -122,29 +135,28 @@ module m_adjoint_test
        test%FU(0,:)=0.0
        test%DP(n_time_step,:)=0.0
        test%DU(n_time_step,:)=0.0
-    else if (test%time_scheme.eq.'AB3') then
-       ! test%FP(0:1,:)=0.0
-       ! test%FU(0:1,:)=0.0
-       ! test%DP(n_time_step:n_time_step-1,:)=0.0
-       ! test%DU(n_time_step:n_time_step-1,:)=0.0
+     else if (test%time_scheme.eq.'AB3') then
+       test%FP(0:1,:)=0.0
+       test%FU(0:1,:)=0.0
+       test%DP(n_time_step:n_time_step-1,:)=0.0
+       test%DU(n_time_step:n_time_step-1,:)=0.0
        
-       ! test%FP(0,:)=0.0
-       ! test%FU(0,:)=0.0
-       ! test%DP(n_time_step,:)=0.0
-       ! test%DU(n_time_step,:)=0.0
-       
+       test%FP(0,:)=0.0
+       test%FU(0,:)=0.0
+       test%DP(n_time_step,:)=0.0
+       test%DU(n_time_step,:)=0.0       
     end if
 
     
-    do i=0,n_time_step
-       test%FP(i,:)=i!real(i/n_time_step)-0.5
-       test%FU(i,:)=i!real(i/n_time_step)-0.5
-    end do
+    ! do i=0,n_time_step
+    !    test%FP(i,:)=i!real(i/n_time_step)-0.5
+    !    test%FU(i,:)=i!real(i/n_time_step)-0.5
+    ! end do
 
-    do i=1,n_time_step
-       test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-       test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
-    end do
+    ! do i=1,n_time_step
+    !    test%FP_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    !    test%FU_half(i,:)=i-0.5!real((i-0.5)/n_time_step)-0.5
+    ! end do
 
     
     ! do i=0,n_time_step
@@ -710,8 +722,9 @@ module m_adjoint_test
        QP(i,:)=QP_current
        QU(i,:)=QU_current
     end do
-    
 
+
+    
 !    QP(n_time_step-1:n_time_step,:)=0.0
 !    QU(n_time_step-1:n_time_step,:)=0.0
 !    ! DP(n_time_step-1:n_time_step,:)=0.0
@@ -747,85 +760,31 @@ module m_adjoint_test
        end do
     end do
   end function inner_product
-  
-  function inner_product1(P,U,DP,DU)
+
+    function inner_product_M(P,U,DP,DU,M)
     real,dimension(:,:),intent(in) :: U,P
     real,dimension(:,:),intent(in) :: DU,DP
-    real                           :: inner_product1
+    type(sparse_matrix),intent(in) :: M
+    real                           :: inner_product_M
     integer                        :: i,j
     integer                        :: n_time_step
-    real,dimension(size(U,2)) :: EP,EU
-    real :: b0,b1,b2,b3
+    real,dimension(size(P,2))      :: MP,MU
 
-    b0=55.0/24.0
-    b1=-59.0/24.0
-    b2=37.0/24.0
-    b3=-9.0/24.0
-    
     n_time_step=size(U,1)
-    inner_product1=0.0
+    inner_product_M=0.0
 
+    do i=1,n_time_step
+       
+       MP=sparse_matmul(M,P(i,:))
+       MU=sparse_matmul(M,U(i,:))
     
-    do i=4,n_time_step-4
-
-       
-    EP=b0*DP(n_time_step-i+1,:)    ! &
-        ! +b1*DP(n_time_step-i+2,:)  &
-        ! +b2*DP(n_time_step-i+3,:)  &
-        ! +b3*DP(n_time_step-i+4,:)
-
-    EU=b0*DU(n_time_step-i+1,:)    ! &
-        ! +b1*DU(n_time_step-i+2,:)  &
-        ! +b2*DU(n_time_step-i+3,:)  &
-        ! +b3*DU(n_time_step-i+4,:)
-
-
-       
        do j=1,size(U,2)
-          inner_product1=inner_product1+U(i,j)*EU(j)+P(i,j)*EP(j)
+          inner_product_M=inner_product_M+MP(j)*DP(i,j)+MU(j)*DU(i,j)
        end do
     end do
-  end function inner_product1
-
-  function inner_product2(FP,FU,QP,QU)
-    real,dimension(:,:),intent(in) :: FU,FP
-    real,dimension(:,:),intent(in) :: QU,QP
-    real                           :: inner_product2
-    integer                        :: i,j
-    integer                        :: n_time_step
-    real,dimension(size(FU,2)) :: EP,EU
-    real :: b0,b1,b2,b3
-
-    b0=55.0/24.0
-    b1=-59.0/24.0
-    b2=37.0/24.0
-    b3=-9.0/24.0
-    
-    n_time_step=size(FU,1)
-    inner_product2=0.0
-
-    
-    do i=4,n_time_step-4
-
-       
-    EP=b0*FP(i,:)       &
-         +b1*FP(i-1,:)  &
-         +b2*FP(i-2,:)  &
-         +b3*FP(i-3,:)
-
-    EU=b0*FU(i,:)       &
-         +b1*FU(i-1,:)  &
-         +b2*FU(i-2,:)  &
-         +b3*FU(i-3,:)
-
-
-       
-       do j=1,size(FU,2)
-          inner_product2=inner_product2+EU(j)*QU(n_time_step-i+1,j) &
-                                     +EP(j)*QP(n_time_step-i+1,j)
-       end do
-    end do
-  end function inner_product2
+  end function inner_product_M
+  
+  
   
 
 end module m_adjoint_test
