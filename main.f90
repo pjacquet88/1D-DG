@@ -4,6 +4,7 @@ program main!
   use m_matrix
   use m_acoustic
   use m_adjoint_test
+  use m_fwi
 
   implicit none
 
@@ -38,6 +39,7 @@ program main!
 
   !*************** Main Variables ***********************************************
   type(acoustic_problem)        :: forward,backward
+  type(t_fwi)                   :: fwi
   real,dimension(:),allocatable :: P,B,Im,Im_lap   ! vector for Imaging Condition
 
   integer                           :: i,j
@@ -178,6 +180,24 @@ program main!
      call system('eog RTM_Lap.png &')
   end if
 
+
+  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+  print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+
+  call init_fwi(fwi,1,velocity,density,P,nb_elem,DoF,time_scheme,         &
+       total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
+       receiver_loc)
+
+  call one_fwi_step(fwi)
+
+  call free_fwi(fwi)
+
+  
+
+
+
+  
   
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
