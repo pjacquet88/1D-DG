@@ -15,9 +15,11 @@ module m_fwi
      real,dimension(:)  ,allocatable  :: gradJ_density
      real,dimension(:)  ,allocatable  :: velocity_model
      real,dimension(:)  ,allocatable  :: density_model
-     integer                          :: nb_frame
-     real,dimension(:)  ,allocatable  :: data
-     real,dimension(:)  ,allocatable  :: P_received
+     integer                          :: n_time_step
+     real,dimension(:,:),allocatable  :: data_P
+     real,dimension(:,:),allocatable  :: data_U
+     real,dimension(:,:),allocatable  :: P_received
+     real,dimension(:,:),allocatable  :: U_received
      real,dimension(:,:),allocatable  :: P
      real,dimension(:,:),allocatable  :: U
      real,dimension(:,:),allocatable  :: QP
@@ -41,26 +43,26 @@ module m_fwi
 
 contains
 
-  subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data,nb_elem,DoF,&
-                      time_scheme,total_length,final_time,alpha,bernstein,k_max,&
-                      epsilon,source_loc,receiver_loc)
-    type(t_fwi)      ,intent(inout) :: fwi
-    integer          ,intent(in)  :: nb_iter
-    real,dimension(:),intent(in)  :: velocity_model
-    real,dimension(:),intent(in)  :: density_model
-    real,dimension(:),intent(in)  :: data
-    integer          ,intent(in)  :: nb_elem
-    integer          ,intent(in)  :: DoF
-    character(len=*) ,intent(in)  :: time_scheme
-    real             ,intent(in)  :: total_length
-    real             ,intent(in)  :: final_time
-    real             ,intent(in)  :: alpha
-    logical          ,intent(in)  :: bernstein
-    integer          ,intent(in)  :: k_max
-    real             ,intent(in)  :: epsilon
-    integer          ,intent(in)  :: source_loc
-    integer          ,intent(in)  :: receiver_loc
-    
+  subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data_P,data_U,   &
+                      nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
+                      bernstein,k_max,epsilon,source_loc,receiver_loc)
+    type(t_fwi)        ,intent(inout) :: fwi
+    integer            ,intent(in)    :: nb_iter
+    real,dimension(:)  ,intent(in)    :: velocity_model
+    real,dimension(:)  ,intent(in)    :: density_model
+    real,dimension(:,:),intent(in)    :: data_P
+    real,dimension(:,:),intent(in)    :: data_U
+    integer            ,intent(in)    :: nb_elem
+    integer            ,intent(in)    :: DoF
+    character(len=*)   ,intent(in)    :: time_scheme
+    real               ,intent(in)    :: total_length
+    real               ,intent(in)    :: final_time
+    real               ,intent(in)    :: alpha
+    logical            ,intent(in)    :: bernstein
+    integer            ,intent(in)    :: k_max
+    real               ,intent(in)    :: epsilon
+    integer            ,intent(in)    :: source_loc
+    integer            ,intent(in)    :: receiver_loc
     
     fwi%nb_iter=nb_iter
     fwi%model_size=size(density_model)
@@ -71,8 +73,11 @@ contains
     fwi%velocity_model=velocity_model
     fwi%density_model=density_model
 
-    fwi%nb_frame=size(data)
-    allocate(fwi%data(fwi%nb_frame))
+    allocate(fwi%data_P(0:size(data_P,1)-1,size(data_U,2)))
+    allocate(fwi%data_U(0:size(data_U,1)-1,size(data_U,2)))
+
+    fwi%data_P=data_P
+    fwi%data_U=data_U
 
     fwi%nb_elem=nb_elem
     fwi%DoF=DoF
@@ -88,11 +93,6 @@ contains
     
     allocate(fwi%gradJ_velocity(fwi%model_size))
     allocate(fwi%gradJ_density(fwi%model_size))
-    allocate(fwi%P_received(fwi%nb_frame))
-    allocate(fwi%P(fwi%model_size,fwi%nb_frame))
-    allocate(fwi%U(fwi%model_size,fwi%nb_frame))
-    allocate(fwi%QP(fwi%model_size,fwi%nb_frame))
-    allocate(fwi%QU(fwi%model_size,fwi%nb_frame))
 
     fwi%signal='flat'
     fwi%boundaries='ABC'
@@ -104,19 +104,17 @@ contains
 
     deallocate(fwi%velocity_model)
     deallocate(fwi%density_model)
-    deallocate(fwi%data)
+    deallocate(fwi%data_P)
+    deallocate(fwi%data_U)
     deallocate(fwi%gradJ_velocity)
     deallocate(fwi%gradJ_density)
-    deallocate(fwi%P_received)
-    deallocate(fwi%P)
-    deallocate(fwi%U)
-    deallocate(fwi%QP)
-    deallocate(fwi%QU)
   end subroutine free_fwi
 
 
   subroutine one_fwi_step(fwi)
     type(t_fwi),intent(inout) :: fwi
+    integer                   :: current_time_step,i
+    real                      :: t
 
     !------------------------------ Forward -------------------------------------
     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
@@ -125,11 +123,45 @@ contains
     call init_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme,          &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
          fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
-         fwi%epsilon,fwi%source_loc,fwi%receiver_loc,fwi%nb_frame,.true.)
+         fwi%epsilon,fwi%source_loc,fwi%receiver_loc,1,.true.)
 
 
 
+    print*,'Initialization done'
+    
+    
+    fwi%n_time_step=fwi%forward%n_time_step
+    print*,'Il y a :',fwi%n_time_step,' time steps'
+    
+    allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    allocate(fwi%P_received(0:fwi%n_time_step,2))
+    allocate(fwi%U_received(0:fwi%n_time_step,2))
+    fwi%P(:,0)=0
+    fwi%U(:,0)=0
 
+    current_time_step=0
+    t=0
+    do current_time_step=1,fwi%n_time_step
+       t=current_time_step*fwi%forward%dt
+       call one_time_step(fwi%forward,t)
+       fwi%P(:,current_time_step)=fwi%forward%P
+       fwi%U(:,current_time_step)=fwi%forward%U
+       fwi%P_received(current_time_step,1)=t
+       fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%receiver_loc)
+       fwi%U_received(current_time_step,1)=t
+       fwi%U_received(current_time_step,2)=fwi%forward%P(fwi%receiver_loc)
+    end do
+
+    print*,'Calculus done'
+
+    ! do i=0,fwi%n_time_step
+    !    if (modulo(i,100).eq.0) then
+    !       call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
+    !    else if (i.eq.0) then
+    !       call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
+    !    end if
+    ! end do
     call free_acoustic_problem(fwi%forward)
 
 

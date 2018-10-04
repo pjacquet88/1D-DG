@@ -1,5 +1,5 @@
 # animate the forward problem
-plot 'Files/P'.i.'.dat' title 'P'.i,'Files/U'.i.'.dat' title 'U'.i
+plot 'Files/P'.i.'.dat' title 'P'.i#,'Files/U'.i.'.dat' title 'U'.i
 
 # animate the backward problem
 #plot 'Files/B'.i.'.dat' title 'B'.i

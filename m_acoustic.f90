@@ -40,20 +40,20 @@ module m_acoustic
      integer                         :: n_time_step   ! nb of time step
      integer                         :: n_display     ! nb of time step between each saves
      integer                         :: n_frame       ! nb of time where the sol. is saved
-     logical                         :: forward       ! T=forward of F=backward
+     logical                         :: forward       ! T=forward or F=backward
   end type acoustic_problem
   
   real,dimension(15)                 :: xx,weight
   real,parameter :: PI=acos(-1.0)
 
-  public  :: init_problem,init_operator,all_time_step,                          &
+  public  :: init_problem,init_operator,all_time_step,one_time_step,            &
              free_acoustic_problem,                                             &
              print_sol,error_periodique
 
   private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
-             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_signal,one_time_step
+             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_signal
   
 contains
 
@@ -277,7 +277,7 @@ contains
        end do
        close(10)
        do i=0,size(problem%receiver_signal,1)-1
-          problem%receiver_signal(i,2)=problem%data(i,2)*                          &
+          problem%receiver_signal(i,2)=problem%data(i,2)*                       &
                min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*   &
                problem%data(i,1)/problem%final_time))!-problem%receiver_signal(i,2)
        end do
@@ -298,7 +298,7 @@ contains
     print*,'n_time_step          ::',problem%n_time_step
     print*,'n_display            ::',problem%n_display
     print*,'Boundary Condition   ::','   ',boundaries
-    print*,'Time scheme         ::' ,'   ',time_scheme
+    print*,'Time scheme          ::' ,'   ',time_scheme
     print*,'Penalisation alpha   ::',alpha
     print*,'Max Iter Power-Method::',k_max
     print*,'Epsilon Power-Method ::',epsilon
