@@ -83,7 +83,7 @@ program main!
      density(i)=i
   end do
 
-  call init_problem(forward,nb_elem,DoF,time_scheme,velocity,density,           &
+  call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity,density,           &
                     total_length,final_time,alpha,bernstein,signal,boundaries,  &
                     k_max,epsilon,source_loc,receiver_loc)
 
@@ -94,7 +94,7 @@ program main!
   data_P(0,2)=0.0
   do i=1,forward%n_time_step
      t=i*forward%dt
-     call one_time_step(forward,t)
+     call one_forward_step(forward,t)
      data_P(i,1)=t
      data_P(i,2)=forward%P(receiver_loc)
   end do

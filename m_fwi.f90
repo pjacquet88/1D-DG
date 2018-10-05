@@ -3,12 +3,13 @@ module m_fwi
   use m_matrix
   use m_time_scheme
   use m_acoustic
+  use m_adjoint
   implicit none
 
 
   type t_fwi
      type(acoustic_problem)           :: forward
-     type(acoustic_problem)           :: backward
+     type(adjoint_problem)            :: backward
      integer                          :: nb_iter
      integer                          :: model_size
      real,dimension(:)  ,allocatable  :: gradJ_velocity
@@ -120,7 +121,7 @@ contains
     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     print*,'%%%%%%%%%%%%%%%%%%%%% FORWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    call init_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme,          &
+    call init_acoustic_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
          fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
          fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
@@ -131,7 +132,17 @@ contains
     
     
     fwi%n_time_step=fwi%forward%n_time_step
-    print*,'Il y a :',fwi%n_time_step,' time steps'
+
+
+    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    call init_adjoint_problem(fwi%backward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
+         fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
+         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
+         fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
+
+        print*,'Il y a :',fwi%n_time_step,' time steps'
     
     allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
@@ -144,7 +155,7 @@ contains
     t=0
     do current_time_step=1,fwi%n_time_step
        t=current_time_step*fwi%forward%dt
-       call one_time_step(fwi%forward,t)
+       call one_forward_step(fwi%forward,t)
        fwi%P(:,current_time_step)=fwi%forward%P
        fwi%U(:,current_time_step)=fwi%forward%U
        fwi%P_received(current_time_step,1)=t
@@ -162,8 +173,10 @@ contains
           call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
        end if
     end do
-    call free_acoustic_problem(fwi%forward)
 
+
+
+    call free_acoustic_problem(fwi%forward)
 
   end subroutine one_fwi_step
 

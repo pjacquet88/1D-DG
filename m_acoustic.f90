@@ -40,9 +40,10 @@ module m_acoustic
   real,dimension(15)                 :: xx,weight
   real,parameter :: PI=acos(-1.0)
 
-  public  :: init_problem,init_operator,all_time_step,one_time_step,            &
+  public  :: init_acoustic_problem,init_acoustic_operator,all_forward_step,     &
+             one_forward_step,                                                  &
              free_acoustic_problem,                                             &
-             print_sol,error_periodique
+             error_periodique
 
   private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
@@ -146,7 +147,7 @@ contains
   end function solution
 
 
-  subroutine init_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
+  subroutine init_acoustic_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
                           total_length,final_time,alpha,bernstein,signal,       &
                           boundaries,k_max,epsilon,source_loc,receiver_loc)
     
@@ -234,9 +235,9 @@ contains
     
     !---------------init matrices------------------
     if (problem%boundaries.eq.'ABC') then
-       call init_operator_abc(problem)
+       call init_acoustic_operator_abc(problem)
     else
-       call init_operator(problem)
+       call init_acoustic_operator(problem)
     end if
     
     problem%n_time_step=int(problem%final_time/problem%dt)+1
@@ -264,7 +265,7 @@ contains
        print*,'The problem is solved with Lagrange elements'
     end if
     print*,'------------------------------------------------------------'    
-  end subroutine init_problem
+  end subroutine init_acoustic_problem
 
   
   subroutine init_UP(problem)
@@ -649,7 +650,7 @@ contains
   end subroutine init_dt
   
 
-  subroutine init_operator(problem)
+  subroutine init_acoustic_operator(problem)
     type(acoustic_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
@@ -751,11 +752,11 @@ contains
        end do
     end if
     call Full2Sparse(App_full,problem%App)
-  end subroutine init_operator
+  end subroutine init_acoustic_operator
 
 
   
-   subroutine init_operator_abc(problem)
+   subroutine init_acoustic_operator_abc(problem)
     type(acoustic_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
@@ -888,11 +889,11 @@ contains
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
-  end subroutine init_operator_abc
+  end subroutine init_acoustic_operator_abc
   
   
   !**************** RESOLUTION DU PROBLEM *************************************
-  subroutine one_time_step(problem,t)
+  subroutine one_forward_step(problem,t)
     type(acoustic_problem),intent(inout) :: problem
     real,                  intent(in)    :: t
 
@@ -951,19 +952,19 @@ contains
 
        
     end if
-  end subroutine one_time_step
+  end subroutine one_forward_step
 
 
-  subroutine all_time_step(problem)
+  subroutine all_forward_step(problem)
     type(acoustic_problem),intent(inout) :: problem
     integer                              :: i
     real                                 :: t
     
     do i=1,problem%n_time_step
        t=i*problem%dt
-       call one_time_step(problem,t)
+       call one_forward_step(problem,t)
     end do
-  end subroutine all_time_step
+  end subroutine all_forward_step
 
 
   
@@ -982,17 +983,6 @@ contains
     call free_sparse_matrix(problem%App)
   end subroutine free_acoustic_problem
 
-  subroutine print_sol(problem,N)
-    type(acoustic_problem),intent(in) :: problem
-    integer               ,intent(in) :: N
-
-      call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
-           problem%bernstein,N,'U')
-
-       call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
-            problem%bernstein,N,'P')
-  end subroutine print_sol
-  
 
   subroutine error_periodique(problem,t,errorU,errorP,iter)
     type(acoustic_problem),intent(in)  :: problem
