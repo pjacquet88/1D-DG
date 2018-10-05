@@ -34,7 +34,13 @@ module m_acoustic
      !----------- SOURCE & RECEIVER ------------------
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
+     real,dimension(:,:),allocatable :: receiver      ! vector describing receivers values as a function of time
+     real,dimension(:,:),allocatable :: data          ! vector describing real datas values as a function of time
+     real,dimension(:,:),allocatable :: receiver_signal ! what we inject in the backward
      integer                         :: n_time_step   ! nb of time step
+     integer                         :: n_display     ! nb of time step between each saves
+     integer                         :: n_frame       ! nb of time where the sol. is saved
+     logical                         :: forward       ! T=forward or F=backward
   end type acoustic_problem
   
   real,dimension(15)                 :: xx,weight
@@ -47,7 +53,7 @@ module m_acoustic
   private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
-             init_s_glob,init_FpFv,init_DpDv,init_dt
+             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_signal
   
 contains
 
@@ -148,7 +154,8 @@ contains
 
   subroutine init_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
                           total_length,final_time,alpha,bernstein,signal,       &
-                          boundaries,k_max,epsilon,source_loc,receiver_loc)
+                          boundaries,k_max,epsilon,source_loc,receiver_loc,     &
+                          n_frame,forward)
     
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
@@ -166,6 +173,8 @@ contains
     real                  ,intent(in)  :: epsilon
     integer               ,intent(in)  :: source_loc
     integer               ,intent(in)  :: receiver_loc
+    integer               ,intent(in)  :: n_frame
+    logical               ,intent(in)  :: forward
     
     integer :: i,j
     integer :: dv,dp,size_velocity,size_density
@@ -185,6 +194,9 @@ contains
     problem%signal=signal
     problem%receiver_loc=receiver_loc
     problem%source_loc=source_loc
+    problem%n_frame=n_frame
+    problem%forward=forward
+
     
     size_velocity=size(velocity)
     size_density=size(density)
@@ -239,9 +251,41 @@ contains
        call init_operator(problem)
     end if
     
-    problem%n_time_step=int(problem%final_time/problem%dt)+1
+    problem%n_time_step=int(problem%final_time/problem%dt)
+    if (problem%n_time_step.le.problem%n_frame) then
+       problem%n_display=1 ! to avoid errors
+    else
+       problem%n_display=int(problem%n_time_step/problem%n_frame)+1
+    end if
+
+    problem%n_time_step=problem%n_display*problem%n_frame
     problem%final_time=problem%dt*problem%n_time_step
     ! here I change the final time to fit frames of the forward and the backward
+    
+    allocate(problem%receiver(0:problem%n_time_step/problem%n_display,2))
+    if (.not.problem%forward) then
+       allocate(problem%data(0:problem%n_time_step/problem%n_display,2))
+       allocate(problem%receiver_signal(0:problem%n_time_step/problem%n_display,2))
+       open(unit=10,file='data.dat',status="old", action="read")
+       do i=0,size(problem%data,1)-1
+          read(10,*) problem%data(i,1),problem%data(i,2)
+       end do
+       close(10)
+       open(unit=10,file='receiver.dat',status="old", action="read")
+       do i=0,size(problem%receiver_signal,1)-1
+          read(10,*) problem%receiver_signal(i,1),problem%receiver_signal(i,2)
+       end do
+       close(10)
+       do i=0,size(problem%receiver_signal,1)-1
+          problem%receiver_signal(i,2)=problem%data(i,2)*                       &
+               min(1.0,10*exp(-50*(problem%data(i,1)/problem%final_time-0.8)*   &
+               problem%data(i,1)/problem%final_time))!-problem%receiver_signal(i,2)
+       end do
+       open(unit=35,file='data_backward.dat')
+       do i=0,size(problem%receiver_signal,1)-1
+          write(35,*) problem%receiver_signal(i,1),problem%receiver_signal(i,2)
+       end do
+    end if
 
     print*,'Ap Av done'
     call init_UP(problem)
@@ -252,6 +296,7 @@ contains
     print*,'dx                   ::',problem%dx
     print*,'dt                   ::',problem%dt
     print*,'n_time_step          ::',problem%n_time_step
+    print*,'n_display            ::',problem%n_display
     print*,'Boundary Condition   ::','   ',boundaries
     print*,'Time scheme          ::' ,'   ',time_scheme
     print*,'Penalisation alpha   ::',alpha
@@ -467,13 +512,14 @@ contains
     end do
   end subroutine init_s_glob
 
-  subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha,receiver_loc)
+  subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha,forward,receiver_loc)
     real,dimension(:,:),intent(out) :: Fp
     real,dimension(:,:),intent(out) :: Fv
     integer            ,intent(in)  :: DoF
     integer            ,intent(in)  :: nb_elem
     character(len=*)   ,intent(in)  :: boundaries
     real               ,intent(in)  :: alpha
+    logical            ,intent(in)  :: forward
     integer            ,intent(in)  :: receiver_loc
 
     integer :: i,j
@@ -558,6 +604,11 @@ contains
 
        Fv(Dof*nb_elem,Dof*nb_elem)=0.0!-1.0-2.0*alpha_dummy
        Fv(Dof*nb_elem,1)=0.0
+
+       ! if (.not.forward) then
+       !    Fv(DoF*receiver_loc,DoF*receiver_loc)=-1.0-2.0*alpha_dummy
+       !    Fv(DoF*receiver_loc+1,DoF*receiver_loc+1)=1.0+2.0*alpha_dummy
+       ! end if
        
        alpha_dummy=-alpha
 
@@ -670,7 +721,7 @@ contains
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
     call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
-                   problem%receiver_loc)
+                   problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
     
     Ap_full=0.0
@@ -777,7 +828,7 @@ contains
     call init_s_loc(s_loc,DoF,problem%bernstein)
     call init_s_glob(s_glob,s_loc,nb_elem)
     call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
-                   problem%receiver_loc)
+                   problem%forward,problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
 
     Ap_full=0.0
@@ -817,6 +868,13 @@ contains
           Av_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(Av_full,B)+Av_full
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
+
+       ! if (.not.problem%forward) then
+       !    dummy=transpose(Av_full)
+       !    Av_full=transpose(Ap_full)
+       !    Ap_full=dummy
+       !    App_full=transpose(App_full)
+       ! end if
        
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
@@ -954,19 +1012,54 @@ contains
   end subroutine one_time_step
 
 
-  subroutine all_time_step(problem)
+  subroutine all_time_step(problem,sortie)
     type(acoustic_problem),intent(inout) :: problem
+    logical               ,intent(in)    :: sortie
     integer                              :: i
     real                                 :: t
+    
+    if (sortie) then
+       call print_sol(problem,0)
+    end if
+
+    problem%receiver(0,1)=0.0
+    problem%receiver(0,2)=0.0
     
     do i=1,problem%n_time_step
        t=i*problem%dt
        call one_time_step(problem,t)
+
+       if (modulo(i,problem%n_display).eq.0) then
+
+          if (problem%receiver_loc.ne.0) then
+              problem%receiver(i/problem%n_display,1)=t
+              problem%receiver(i/problem%n_display,2)=problem%P(problem%receiver_loc*problem%DoF+1)
+
+             if (sortie) then
+                if (modulo(i,problem%n_display).eq.0) then
+                   call print_sol(problem,i/problem%n_display)
+                end if
+             end if
+          end if
+       end if
     end do
+    
+    if (problem%forward) then
+       open(23, file="receiver.dat", form="formatted")
+       do i=0,size(problem%receiver,1)-1
+          write(23,*) problem%receiver(i,1),problem%receiver(i,2)
+       end do
+       close(23)
+    end if
+    
+    ! if (problem%forward) then
+    !    do i=0,problem%n_time_step
+    !       t=i*problem%dt
+    !       write(25,*) t,eval_backward_signal(problem%receiver,t,problem%final_time)
+    !    end do
+    ! end if
   end subroutine all_time_step
 
-
-  
   subroutine free_acoustic_problem(problem)
     type(acoustic_problem),intent(inout) :: problem
     deallocate(problem%U)
@@ -986,11 +1079,19 @@ contains
     type(acoustic_problem),intent(in) :: problem
     integer               ,intent(in) :: N
 
+    if (problem%forward) then
       call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
            problem%bernstein,N,'U')
 
        call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
             problem%bernstein,N,'P')
+    else
+      ! call print_vect(problem%U,problem%nb_elem,problem%DoF,problem%dx,           &
+      !      problem%bernstein,N,'Ub')
+
+       call print_vect(problem%P,problem%nb_elem,problem%DoF,problem%dx,           &
+            problem%bernstein,problem%n_frame-N,'B')
+    end if
   end subroutine print_sol
   
 
@@ -1064,8 +1165,33 @@ contains
     print*,'-----------------------------'
 
   end subroutine error_periodique
-
   
+  function eval_backward_signal(receiver_signal,t,final_time)
+    real,dimension(:,:),intent(in) :: receiver_signal
+    real               ,intent(in) :: t
+    real               ,intent(in) :: final_time
+    real                           :: eval_backward_signal
+    integer                        :: i
+    real                           :: t2
+
+    t2=final_time-t
+
+    i=1
+    do while ((receiver_signal(i,1).le.t2).and.(i.ne.size(receiver_signal,1)))
+       i=i+1
+    end do
+    i=i-1
+
+    if (i.eq.0) then
+       print*,'test',i,t,t2
+    end if
+
+    eval_backward_signal=(t2-receiver_signal(i,1))*receiver_signal(i+1,2)       &
+                        +(receiver_signal(i+1,1)-t2)*receiver_signal(i,2)
+    eval_backward_signal=eval_backward_signal/(receiver_signal(i+1,1)           &
+                        -receiver_signal(i,1))
+  end function eval_backward_signal
+
   subroutine eval_RHS(RHSp,RHSv,problem,t)
     real,dimension(:)   ,intent(inout) :: RHSp
     real,dimension(:)   ,intent(inout) :: RHSv
@@ -1094,8 +1220,14 @@ contains
        end if
 
        if (problem%signal.eq.'flat') then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+          if (problem%forward) then
+             gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+             RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+          else
+             gg=eval_backward_signal(problem%receiver_signal,t,problem%final_time)
+             ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
+             RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
+          end if
        end if
     end if
 

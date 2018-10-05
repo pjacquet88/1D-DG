@@ -9,7 +9,7 @@ program main!
   implicit none
 
   !*************** Problem Parameters *******************************************
-  integer         ,parameter :: nb_elem=150          ! Nb of elements (all same length)
+  integer         ,parameter :: nb_elem=100          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
   real            ,parameter :: final_time=2.0       ! final time
@@ -85,7 +85,7 @@ program main!
 
   call init_problem(forward,nb_elem,DoF,time_scheme,velocity,density,           &
                     total_length,final_time,alpha,bernstein,signal,boundaries,  &
-                    k_max,epsilon,source_loc,receiver_loc,1,.true.)
+                    k_max,epsilon,source_loc,receiver_loc)
 
   allocate(data_P(0:forward%n_time_step,2))
   allocate(data_U(0:forward%n_time_step,2))

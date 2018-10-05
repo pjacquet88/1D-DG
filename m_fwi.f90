@@ -123,7 +123,7 @@ contains
     call init_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme,          &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
          fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
-         fwi%epsilon,fwi%source_loc,fwi%receiver_loc,1,.true.)
+         fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
 
 
 
@@ -155,13 +155,13 @@ contains
 
     print*,'Calculus done'
 
-    ! do i=0,fwi%n_time_step
-    !    if (modulo(i,100).eq.0) then
-    !       call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
-    !    else if (i.eq.0) then
-    !       call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
-    !    end if
-    ! end do
+    do i=0,fwi%n_time_step
+       if (modulo(i,100).eq.0) then
+          call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
+       else if (i.eq.0) then
+          call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
+       end if
+    end do
     call free_acoustic_problem(fwi%forward)
 
 
