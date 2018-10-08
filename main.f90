@@ -3,26 +3,29 @@ program main!
   use m_polynom
   use m_matrix
   use m_acoustic
+  use m_adjoint
   use m_adjoint_test
   use m_fwi
 
   implicit none
 
   !*************** Problem Parameters *******************************************
-  integer         ,parameter :: nb_elem=100          ! Nb of elements (all same length)
+  integer         ,parameter :: nb_elem=200          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=2.0       ! final time
-  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
+  real            ,parameter :: final_time=3.0       ! final time
+  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
-  logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
+  logical         ,parameter :: bernstein=.false.    ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! itlsr max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
   integer         ,parameter :: n_frame=200          ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
-  integer         ,parameter :: receiver_loc=10      ! location of the receiver(elemts)
+  integer         ,parameter :: receiver_loc=2     ! location of the receiver(elemts)
+
+  character(len=*),parameter :: strategy='ATD'
   
   real,dimension(1)          :: velocity ! velocity model change the size to change the model 
   real,dimension(3)          :: density  ! density model change the size to change the model
@@ -107,7 +110,7 @@ program main!
   close(22)
   
   call free_acoustic_problem(forward)
-  
+ 
   call cpu_time(t0)
   
 
@@ -117,7 +120,7 @@ program main!
 
   call init_fwi(fwi,1,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
        total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
-       receiver_loc)
+       receiver_loc,strategy)
 
   call one_fwi_step(fwi)
 

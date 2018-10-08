@@ -70,17 +70,32 @@ contains
 
 
   !************ UNCTION SPARSE MATRIX ******************************************
-  subroutine init_sparse_matrix(A,NNN,nb_ligne)
+  subroutine init_sparse_matrix(A,NNN,nb_ligne,IA,JA,Values)
     type(sparse_matrix),intent(inout) :: A
     integer            ,intent(in)    :: NNN
     integer            ,intent(in)    :: nb_ligne
+    integer,dimension(:)  ,optional      :: IA
+    integer,dimension(:)  ,optional      :: JA
+    real,dimension(:)  ,optional      :: Values
 
     A%NNN=NNN
     A%nb_ligne=nb_ligne
     allocate(A%Values(NNN))
     allocate(A%IA(0:nb_ligne))
     A%IA(0)=0
-    allocate(A%JA(1:NNN))  
+    allocate(A%JA(1:NNN))
+
+    if (present(IA)) then
+       A%IA=IA
+    end if
+    
+    if (present(JA)) then
+       A%JA=JA
+    end if
+    
+    if (present(Values)) then
+       A%Values=Values
+    end if
   end subroutine init_sparse_matrix
 
   
@@ -227,6 +242,36 @@ contains
      print*,'IS NOT SYMETRIC'
   end if
 end subroutine is_sym
+
+subroutine sparse_is_sym(sparse_A)
+  type(sparse_matrix),intent(in) :: sparse_A
+  real,dimension(:,:),allocatable:: A
+  integer :: i,j
+  logical :: test
+
+  call Sparse2Full(sparse_A,A)
+  
+  test=.TRUE.  
+  do i=1,size(A,1)
+     do j=i,size(A,1)
+
+        if (A(i,j).ne.A(j,i)) then
+           test=.FALSE.
+           exit
+        end if
+     end do
+     if (.not.test) exit
+  end do
+
+  if (test) then
+     print*,'IS SYMETRIC'
+  else
+     print*,'IS NOT SYMETRIC'
+  end if
+
+  deallocate(A)
+  
+end subroutine sparse_is_sym
 
 
 end module m_matrix

@@ -36,6 +36,13 @@ module m_adjoint
      integer                         :: receiver_loc  ! beginning of an element
 
      integer                         :: n_time_step   ! nb of time step
+
+     real,dimension(:,:),allocatable :: data_P
+     real,dimension(:,:),allocatable :: data_U
+     real,dimension(:,:),allocatable :: P_received
+     real,dimension(:,:),allocatable :: U_received
+
+     character(len=20)               :: strategy
   end type adjoint_problem
   
   real,dimension(15)                 :: xx,weight
@@ -47,7 +54,7 @@ module m_adjoint
   private :: xx,weight,solution,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
-             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_signal
+             init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_source
   
 contains
 
@@ -148,7 +155,8 @@ contains
 
   subroutine init_adjoint_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
                           total_length,final_time,alpha,bernstein,signal,       &
-                          boundaries,k_max,epsilon,source_loc,receiver_loc)
+                          boundaries,k_max,epsilon,source_loc,receiver_loc,     &
+                          data_P,data_U,P_received,U_received,strategy)
                           
     
     type(adjoint_problem),intent(out) :: problem
@@ -167,6 +175,11 @@ contains
     real                  ,intent(in)  :: epsilon
     integer               ,intent(in)  :: source_loc
     integer               ,intent(in)  :: receiver_loc
+    real,dimension(:,:)   ,intent(in)  :: data_P
+    real,dimension(:,:)   ,intent(in)  :: data_U
+    real,dimension(:,:)   ,intent(in)  :: P_received
+    real,dimension(:,:)   ,intent(in)  :: U_received
+    character(len=*)      ,intent(in)  :: strategy
     
     integer :: i,j
     integer :: dv,dp,size_velocity,size_density
@@ -232,6 +245,9 @@ contains
     do j=size(density)*dp+1,nb_elem
        problem%density(j)=density(size(density))
     end do
+
+    problem%strategy=strategy
+    
     
     !---------------init matrices------------------
     if (problem%boundaries.eq.'ABC') then
@@ -265,6 +281,18 @@ contains
        print*,'The problem is solved with Lagrange elements'
     end if
     print*,'------------------------------------------------------------'    
+
+
+    allocate(problem%data_P(size(data_P,1),size(data_P,2)))
+    problem%data_P=data_P
+    allocate(problem%data_U(size(data_U,1),size(data_U,2)))
+    problem%data_U=data_U
+    allocate(problem%P_received(size(P_received,1),size(P_received,2)))
+    problem%P_received=P_received
+    allocate(problem%U_received(size(U_received,1),size(U_received,2)))   
+    problem%U_received=U_received
+
+
   end subroutine init_adjoint_problem
 
   
@@ -687,7 +715,7 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                    problem%k_max,problem%epsilon,problem%nb_elem,             &
+                    problem%k_max,problem%epsilon,problem%nb_elem,              &
                     problem%time_scheme)
 
        if (problem%time_scheme.eq.'LF4') then
@@ -766,6 +794,7 @@ contains
     real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
     integer                                     :: i,j
     integer                                     :: DoF,nb_elem
+    type(sparse_matrix)                         :: sparse_dummy
     
     DoF=problem%DoF           ! For sake of lisibility
     nb_elem=problem%nb_elem
@@ -819,9 +848,10 @@ contains
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
        
-       call Full2Sparse(Ap_full,problem%Ap)
-       call Full2Sparse(Av_full,problem%Av)
-       call Full2Sparse(App_full,problem%App)
+
+          call Full2Sparse(Ap_full,problem%Ap)
+          call Full2Sparse(Av_full,problem%Av)
+          call Full2Sparse(App_full,problem%App)
        
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
@@ -870,11 +900,10 @@ contains
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
 
-
           call Full2Sparse(Ap_full,problem%Ap)
           call Full2Sparse(Av_full,problem%Av)
           call Full2Sparse(App_full,problem%App)
-         
+
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
 
@@ -886,9 +915,27 @@ contains
     end if
     
     print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
-    print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
+    print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x',              &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+
+    print*,'STRATEGY TEST :',problem%strategy
+    
+    if (problem%strategy.eq.'DTA') then
+       call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne, &
+            problem%Ap%IA,problem%Ap%JA,problem%Ap%Values)
+       call free_sparse_matrix(problem%Ap)
+       call transpose_sparse(problem%Av,problem%Ap)
+       call free_sparse_matrix(problem%Av)
+       call transpose_sparse(sparse_dummy,problem%Av)
+       call free_sparse_matrix(sparse_dummy)
+       call init_sparse_matrix(sparse_dummy,problem%App%NNN,problem%App%nb_ligne,&
+            problem%App%IA,problem%App%JA,problem%App%Values)
+       call free_sparse_matrix(problem%App)
+       call transpose_sparse(sparse_dummy,problem%App)
+       call free_sparse_matrix(sparse_dummy)
+    end if
+    
   end subroutine init_adjoint_operator_abc
   
   
@@ -976,18 +1023,21 @@ contains
 
 
   
-  function eval_backward_signal(receiver_signal,t,final_time)
-    real,dimension(:,:),intent(in) :: receiver_signal
+  function eval_backward_source(P_received,data_P,t,final_time)
+    real,dimension(:,:),intent(in) :: P_received
+    real,dimension(:,:),intent(in) :: data_P
     real               ,intent(in) :: t
     real               ,intent(in) :: final_time
-    real                           :: eval_backward_signal
+    real                           :: eval_P_received
+    real                           :: eval_data_P
+    real                           :: eval_backward_source
     integer                        :: i
     real                           :: t2
 
     t2=final_time-t
 
-    i=1
-    do while ((receiver_signal(i,1).le.t2).and.(i.ne.size(receiver_signal,1)))
+    i=2
+    do while ((P_received(i,1).le.t2).and.(i.ne.size(data_P,1)))
        i=i+1
     end do
     i=i-1
@@ -996,11 +1046,32 @@ contains
        print*,'test',i,t,t2
     end if
 
-    eval_backward_signal=(t2-receiver_signal(i,1))*receiver_signal(i+1,2)       &
-                        +(receiver_signal(i+1,1)-t2)*receiver_signal(i,2)
-    eval_backward_signal=eval_backward_signal/(receiver_signal(i+1,1)           &
-                        -receiver_signal(i,1))
-  end function eval_backward_signal
+    eval_P_received=(t2-P_received(i,1))*P_received(i+1,2)       &
+                        +(P_received(i+1,1)-t2)*P_received(i,2)
+    eval_P_received=eval_P_received/(P_received(i+1,1)           &
+         -P_received(i,1))
+
+
+    i=2
+    do while ((data_P(i,1).le.t2).and.(i.ne.size(data_P,1)))
+       i=i+1
+    end do
+    i=i-1
+
+    if (i.eq.0) then
+       print*,'test',i,t,t2
+    end if
+
+    eval_data_P=(t2-data_P(i,1))*data_P(i+1,2)       &
+                        +(data_P(i+1,1)-t2)*data_P(i,2)
+    eval_data_P=eval_data_P/(data_P(i+1,1)           &
+         -data_P(i,1))
+
+
+    !    eval_backward_source=eval_P_received-eval_data_P
+    eval_backward_source=eval_data_P
+
+  end function eval_backward_source
 
   subroutine eval_RHS(RHSp,RHSv,problem,t)
     real,dimension(:)   ,intent(inout) :: RHSp
@@ -1030,19 +1101,17 @@ contains
        end if
 
        if (problem%signal.eq.'flat') then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+         ! gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+         ! RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
           
-          ! gg=eval_backward_signal(problem%receiver_signal,t,problem%final_time)
-          ! ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha)
-          ! RHSv(problem%receiver_loc*problem%DoF)=gg*(-1.0-0.0*problem%alpha)
+           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
+          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
+        RHSv((problem%receiver_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha) 
        end if
     end if
 
-    RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    RHSv=sparse_matmul(problem%Minv_v,RHSv)
-
-
+   RHSp=sparse_matmul(problem%Minv_p,RHSp)
+   RHSv=sparse_matmul(problem%Minv_v,RHSv)
   end subroutine eval_RHS
 
 end module m_adjoint

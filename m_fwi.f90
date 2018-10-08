@@ -39,6 +39,7 @@ module m_fwi
      real                             :: epsilon
      integer                          :: source_loc
      integer                          :: receiver_loc
+     character(len=20)                :: strategy
   end type t_fwi
     
 
@@ -46,7 +47,7 @@ contains
 
   subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data_P,data_U,   &
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
-                      bernstein,k_max,epsilon,source_loc,receiver_loc)
+                      bernstein,k_max,epsilon,source_loc,receiver_loc,strategy)
     type(t_fwi)        ,intent(inout) :: fwi
     integer            ,intent(in)    :: nb_iter
     real,dimension(:)  ,intent(in)    :: velocity_model
@@ -64,6 +65,7 @@ contains
     real               ,intent(in)    :: epsilon
     integer            ,intent(in)    :: source_loc
     integer            ,intent(in)    :: receiver_loc
+    character(len=*)   ,intent(in)    :: strategy
     
     fwi%nb_iter=nb_iter
     fwi%model_size=size(density_model)
@@ -91,6 +93,7 @@ contains
     fwi%epsilon=epsilon
     fwi%source_loc=source_loc
     fwi%receiver_loc=receiver_loc
+    fwi%strategy=strategy
     
     allocate(fwi%gradJ_velocity(fwi%model_size))
     allocate(fwi%gradJ_density(fwi%model_size))
@@ -114,8 +117,11 @@ contains
 
   subroutine one_fwi_step(fwi)
     type(t_fwi),intent(inout) :: fwi
-    integer                   :: current_time_step,i
+    integer                   :: current_time_step
     real                      :: t
+
+    real,dimension(fwi%DoF*fwi%nb_elem) :: RTM
+    integer                             :: i,j
 
     !------------------------------ Forward -------------------------------------
     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
@@ -126,24 +132,8 @@ contains
          fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
          fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
 
-
-
-    print*,'Initialization done'
-    
-    
     fwi%n_time_step=fwi%forward%n_time_step
-
-
-    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    call init_adjoint_problem(fwi%backward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
-         fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
-         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
-         fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
-
-        print*,'Il y a :',fwi%n_time_step,' time steps'
-    
+ 
     allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     allocate(fwi%P_received(0:fwi%n_time_step,2))
@@ -161,13 +151,12 @@ contains
        fwi%P_received(current_time_step,1)=t
        fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%receiver_loc)
        fwi%U_received(current_time_step,1)=t
-       fwi%U_received(current_time_step,2)=fwi%forward%P(fwi%receiver_loc)
+       fwi%U_received(current_time_step,2)=fwi%forward%U(fwi%receiver_loc)
     end do
 
     print*,'Calculus done'
-
     do i=0,fwi%n_time_step
-       if (modulo(i,100).eq.0) then
+       if (modulo(i,20).eq.0) then
           call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
        else if (i.eq.0) then
           call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
@@ -175,8 +164,64 @@ contains
     end do
 
 
-
     call free_acoustic_problem(fwi%forward)
+    print*,'Initialization done'
+    
+    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    call init_adjoint_problem(fwi%backward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
+         fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
+         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
+         fwi%epsilon,fwi%source_loc,fwi%receiver_loc,                           &
+         fwi%data_P,fwi%data_U,fwi%P_received,fwi%U_received,fwi%strategy)
+
+    print*,'test n_time_step'
+    if (fwi%forward%n_time_step.ne.fwi%backward%n_time_step) then
+       print*,'ERROR n_time_step'
+       print*,'forward : ',fwi%forward%n_time_step,fwi%forward%dt
+       print*,'backward : ',fwi%backward%n_time_step,fwi%backward%dt
+       STOP
+    end if
+
+       fwi%n_time_step=fwi%backward%n_time_step
+ 
+    allocate(fwi%QP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    allocate(fwi%QU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    fwi%QP(:,fwi%n_time_step)=0
+    fwi%QU(:,fwi%n_time_step)=0
+
+    current_time_step=fwi%n_time_step
+    t=0
+    do current_time_step=fwi%n_time_step,0,-1
+!   do current_time_step=1,fwi%n_time_step
+       t=current_time_step*fwi%backward%dt
+       call one_backward_step(fwi%backward,t)
+       fwi%QP(:,current_time_step)=fwi%backward%P
+       fwi%QU(:,current_time_step)=fwi%backward%U
+    end do
+
+    print*,'Calculus done'
+    do i=0,fwi%n_time_step
+       if (modulo(i,20).eq.0) then
+          call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
+       else if (i.eq.0) then
+          call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
+       end if
+    end do
+
+    RTM=0.0
+    do i=1,size(RTM)
+       do j=0,fwi%n_time_step
+          RTM(i)=RTM(i)+fwi%P(i,j)*fwi%QP(i,fwi%n_time_step-j)
+       end do
+    end do
+
+    open(unit=23,file='RTM.dat')
+    do i=1,size(RTM)
+       write(23,*) RTM(i)
+    end do
+    close(23)
 
   end subroutine one_fwi_step
 

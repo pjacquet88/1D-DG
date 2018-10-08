@@ -35,6 +35,9 @@ module m_acoustic
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
      integer                         :: n_time_step   ! nb of time step
+
+     real,dimension(:),allocatable   :: RHSv
+     real,dimension(:),allocatable   :: RHSp
   end type acoustic_problem
   
   real,dimension(15)                 :: xx,weight
@@ -148,7 +151,7 @@ contains
 
 
   subroutine init_acoustic_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
-                          total_length,final_time,alpha,bernstein,signal,       &
+                          total_length,final_time,alpha,bernstein,signal,                &
                           boundaries,k_max,epsilon,source_loc,receiver_loc)
     
     type(acoustic_problem),intent(out) :: problem
@@ -239,6 +242,9 @@ contains
     else
        call init_acoustic_operator(problem)
     end if
+
+    allocate(problem%RHSv(nb_elem*DoF))
+    allocate(problem%RHSp(nb_elem*DoF))
     
     problem%n_time_step=int(problem%final_time/problem%dt)+1
     problem%final_time=problem%dt*problem%n_time_step
@@ -766,6 +772,8 @@ contains
     real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
     integer                                     :: i,j
     integer                                     :: DoF,nb_elem
+
+    type(sparse_matrix)                         :: sparse_dummy
     
     DoF=problem%DoF           ! For sake of lisibility
     nb_elem=problem%nb_elem
@@ -822,7 +830,7 @@ contains
        call Full2Sparse(Ap_full,problem%Ap)
        call Full2Sparse(Av_full,problem%Av)
        call Full2Sparse(App_full,problem%App)
-       
+
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
 
@@ -870,10 +878,10 @@ contains
           Ap_full=(1.0/24)*(problem%dt/problem%dx)**2*matmul(B,Ap_full)+Ap_full
        end if
 
-
-          call Full2Sparse(Ap_full,problem%Ap)
-          call Full2Sparse(Av_full,problem%Av)
-          call Full2Sparse(App_full,problem%App)
+       
+       call Full2Sparse(Ap_full,problem%Ap)
+       call Full2Sparse(Av_full,problem%Av)
+       call Full2Sparse(App_full,problem%App)
          
        problem%Ap%Values=(problem%dt/problem%dx)*problem%Ap%Values
        problem%Av%Values=(problem%dt/problem%dx)*problem%Av%Values
@@ -889,6 +897,22 @@ contains
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+
+
+       ! print*,'%%%%%%%%%%%%%% JE SUIS PASSE PAR LA%%%%%%%%%%%%%%%%%%%%%%'
+       ! call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne,  &
+       !      problem%Ap%IA,problem%Ap%JA,problem%Ap%Values)
+       ! call free_sparse_matrix(problem%Ap)
+       ! call transpose_sparse(problem%Av,problem%Ap)
+       ! call free_sparse_matrix(problem%Av)
+       ! call transpose_sparse(sparse_dummy,problem%Av)
+       ! call free_sparse_matrix(sparse_dummy)
+       ! call init_sparse_matrix(sparse_dummy,problem%App%NNN,problem%App%nb_ligne,&
+       !      problem%App%IA,problem%App%JA,problem%App%Values)
+       ! call free_sparse_matrix(problem%App)
+       ! call transpose_sparse(sparse_dummy,problem%App)
+       ! call free_sparse_matrix(sparse_dummy)
+    
   end subroutine init_acoustic_operator_abc
   
   
@@ -919,6 +943,8 @@ contains
     else if (problem%time_scheme.eq.'RK4') then
 
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
+       problem%RHSv=FU_0
+       problem%RHSp=FP_0
        call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
        call eval_RHS(FP_1,FU_1,problem,t)
 
@@ -940,6 +966,8 @@ contains
        RHSv2=0.0
        
        call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
+       problem%RHSv=RHSv0
+       problem%RHSp=RHSp0
        call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
        call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
        
@@ -974,6 +1002,8 @@ contains
     deallocate(problem%P)
     deallocate(problem%density)
     deallocate(problem%velocity)
+    deallocate(problem%RHSv)
+    deallocate(problem%RHSp)
     call free_sparse_matrix(problem%Ap)
     call free_sparse_matrix(problem%Av)
     call free_sparse_matrix(problem%Minv_p)
