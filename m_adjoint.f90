@@ -43,6 +43,12 @@ module m_adjoint
      real,dimension(:,:),allocatable :: U_received
 
      character(len=20)               :: strategy
+     character(len=20)               :: scalar_product
+
+     real,dimension(:)  ,allocatable :: RHSv
+     real,dimension(:)  ,allocatable :: RHSv_half
+     real,dimension(:)  ,allocatable :: RHSp
+     real,dimension(:)  ,allocatable :: RHSp_half
   end type adjoint_problem
   
   real,dimension(15)                 :: xx,weight
@@ -153,13 +159,13 @@ contains
   end function solution
 
 
-  subroutine init_adjoint_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
-                          total_length,final_time,alpha,bernstein,signal,       &
-                          boundaries,k_max,epsilon,source_loc,receiver_loc,     &
-                          data_P,data_U,P_received,U_received,strategy)
-                          
-    
-    type(adjoint_problem),intent(out) :: problem
+  subroutine init_adjoint_problem(problem,nb_elem,DoF,time_scheme,velocity,     &
+                                  density,total_length,final_time,              &
+                                  alpha,bernstein,signal,boundaries,k_max,      &
+                                  epsilon,source_loc,receiver_loc, data_P,      &
+                                  data_U,P_received,U_received,strategy,        &
+                                  scalar_product)
+    type(adjoint_problem) ,intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
     real,dimension(:)     ,intent(in)  :: velocity
@@ -180,6 +186,7 @@ contains
     real,dimension(:,:)   ,intent(in)  :: P_received
     real,dimension(:,:)   ,intent(in)  :: U_received
     character(len=*)      ,intent(in)  :: strategy
+    character(len=*)      ,intent(in)  :: scalar_product
     
     integer :: i,j
     integer :: dv,dp,size_velocity,size_density
@@ -247,6 +254,7 @@ contains
     end do
 
     problem%strategy=strategy
+    problem%scalar_product=scalar_product
     
     
     !---------------init matrices------------------
@@ -292,6 +300,12 @@ contains
     allocate(problem%U_received(size(U_received,1),size(U_received,2)))   
     problem%U_received=U_received
 
+    allocate(problem%RHSv(nb_elem*DoF))
+    allocate(problem%RHSp(nb_elem*DoF))
+    if (time_scheme.eq.'RK4') then
+       allocate(problem%RHSv_half(nb_elem*DoF))
+       allocate(problem%RHSp_half(nb_elem*DoF))
+    end if
 
   end subroutine init_adjoint_problem
 
@@ -363,6 +377,7 @@ contains
   subroutine init_minv_loc(minv_loc,m_loc)
     real,dimension(:,:),intent(out) :: minv_loc
     real,dimension(:,:),intent(in)  :: m_loc
+    minv_loc=0.0
     minv_loc=LU_inv(m_loc)
   end subroutine init_minv_loc
 
@@ -374,6 +389,8 @@ contains
 
     integer :: i,DoF
 
+    m_glob=0.0
+    
     DoF=size(m_loc,1)
         
     do i=1,nb_elem
@@ -387,6 +404,8 @@ contains
     real,dimension(:,:),intent(in)  :: minv_loc
     integer            ,intent(in)  :: nb_elem
     integer                         :: i,DoF
+
+    minv_glob=0.0
 
     DoF=size(minv_loc,1)
     
@@ -411,6 +430,8 @@ contains
     integer                         :: i
     real,dimension(DoF,DoF)         :: m_loc_abc1,m_loc_abc2
     real,dimension(DoF,DoF)         :: minv_loc,minv_loc_abc1,minv_loc_abc2
+
+    minv_glob_abc=0.0
 
     m_loc_abc1=m_loc
     m_loc_abc2=m_loc
@@ -466,6 +487,7 @@ contains
     real,dimension(DoF)             :: bpol,dbpol
     real,dimension(DoF)             :: dlpol
 
+    s_loc=0.0
     
     if (bernstein) then
        s_loc=D1-D0
@@ -489,8 +511,8 @@ contains
     integer :: i,DoF
 
     DoF=size(s_loc,1)
-
-
+    s_glob=0.0
+    
     do i=1,nb_elem
        s_glob(DoF*(i-1)+1:Dof*i,DoF*(i-1)+1:Dof*i)=s_loc
     end do
@@ -673,8 +695,7 @@ contains
        dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
        dt=dt/4.7
-    end if
-
+    end if    
   end subroutine init_dt
   
 
@@ -687,6 +708,8 @@ contains
     real,dimension(problem%DoF,problem%DoF)     :: m_loc,minv_loc,s_loc
     integer                                     :: i,j
     integer                                     :: DoF,nb_elem
+
+    type(sparse_matrix)                         :: sparse_dummy
     
     DoF=problem%DoF           ! For sake of readibility
     nb_elem=problem%nb_elem   ! For sake of readibility
@@ -780,6 +803,29 @@ contains
        end do
     end if
     call Full2Sparse(App_full,problem%App)
+
+
+    if (problem%strategy.eq.'DTA') then
+       call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne, &
+            problem%Ap%IA,problem%Ap%JA,problem%Ap%Values)
+       call free_sparse_matrix(problem%Ap)
+       call transpose_sparse(problem%Av,problem%Ap)
+       call free_sparse_matrix(problem%Av)
+       call transpose_sparse(sparse_dummy,problem%Av)
+       call free_sparse_matrix(sparse_dummy)
+       
+    if (problem%scalar_product.eq.'M') then
+       problem%App=sparse_matmul(problem%App,problem%M)
+       problem%Ap=sparse_matmul(problem%Ap,problem%M)
+       problem%Av=sparse_matmul(problem%Av,problem%M)
+
+       problem%App=sparse_matmul(problem%Minv,problem%App)
+       problem%Ap=sparse_matmul(problem%Minv,problem%Ap)
+       problem%Av=sparse_matmul(problem%Minv,problem%Av)
+    end if
+    
+    end if
+    
   end subroutine init_adjoint_operator
 
 
@@ -869,7 +915,6 @@ contains
        Av_full=matmul(minv_glob,Av_full)
        Av_full=matmul(Dv,Av_full)
 
-
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
                      problem%time_scheme)
@@ -914,12 +959,10 @@ contains
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
-    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
+    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x',              &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
-
-    print*,'STRATEGY TEST :',problem%strategy
     
     if (problem%strategy.eq.'DTA') then
        call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne, &
@@ -934,6 +977,16 @@ contains
        call free_sparse_matrix(problem%App)
        call transpose_sparse(sparse_dummy,problem%App)
        call free_sparse_matrix(sparse_dummy)
+
+       if (problem%scalar_product.eq.'M') then
+          problem%App=sparse_matmul(problem%App,problem%M)
+          problem%Ap=sparse_matmul(problem%Ap,problem%M)
+          problem%Av=sparse_matmul(problem%Av,problem%M)
+
+          problem%App=sparse_matmul(problem%Minv,problem%App)
+          problem%Ap=sparse_matmul(problem%Minv,problem%Ap)
+          problem%Av=sparse_matmul(problem%Minv,problem%Av)
+       end if
     end if
     
   end subroutine init_adjoint_operator_abc
@@ -955,6 +1008,10 @@ contains
     real,dimension(problem%DoF*problem%nb_elem) :: FP_0,FP_half,FP_1
     real,dimension(problem%DoF*problem%nb_elem) :: FU_0,FU_half,FU_1
 
+    real,dimension(problem%nb_elem*problem%DoF) :: zero
+
+    zero=0.0
+
     if ((problem%time_scheme.eq.'LF').or.(problem%time_scheme.eq.'LF4')) then
 
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
@@ -966,11 +1023,21 @@ contains
     else if (problem%time_scheme.eq.'RK4') then
 
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
-       call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
-       call eval_RHS(FP_1,FU_1,problem,t)
 
-       call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-                        FP_0,FP_half,FP_1,FU_0,FU_half,FU_1)
+       call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
+       problem%RHSv_half=FU_half
+       problem%RHSp_half=FP_half
+       call eval_RHS(FP_1,FU_1,problem,t)
+       problem%RHSv=FU_1
+       problem%RHSp=FP_1
+
+       if (problem%strategy.eq.'DTA') then
+          call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+               zero,zero,zero,zero,zero,zero,FP_1,FU_1)
+       else
+          call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+               FP_0,FP_half,FP_1,FU_0,FU_half,FU_1)
+       end if
 
     else if (problem%time_scheme.eq.'AB3') then
 
@@ -980,17 +1047,30 @@ contains
        RHSv1=0.0
        RHSp2=0.0
        RHSv2=0.0
+
        
-       call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
-       call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
-       call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
+
        
-       call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-                      RHSp0,RHSv0,                                              &
-                      RHSp1,RHSv1,                                              &
-                      RHSp2,RHSv2,                                              &
-                      problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
-       
+       if (problem%strategy.eq.'DTA') then
+          call eval_RHS(problem%RHSp,problem%RHSv,problem,t-problem%dt)
+          call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+               zero,zero,                                              &
+               zero,zero,                                              &
+               zero,zero,                                              &
+               problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2,        &
+               problem%RHSp,problem%RHSv)
+       else
+          call eval_RHS(problem%RHSp,problem%RHSv,problem,t-problem%dt)
+          call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
+          call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
+          call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
+          call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
+               RHSp0,RHSv0,                                              &
+               RHSp1,RHSv1,                                              &
+               RHSp2,RHSv2,                                              &
+               problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
+       end if
+
     end if
   end subroutine one_backward_step
 
@@ -1012,6 +1092,16 @@ contains
     deallocate(problem%P)
     deallocate(problem%density)
     deallocate(problem%velocity)
+    deallocate(problem%data_P)
+    deallocate(problem%data_U)
+    deallocate(problem%P_received)
+    deallocate(problem%U_received)
+    deallocate(problem%RHSv)
+    deallocate(problem%RHSp)
+    if (problem%time_scheme.eq.'RK4') then
+    deallocate(problem%RHSv_half)
+    deallocate(problem%RHSp_half)
+    end if
     call free_sparse_matrix(problem%Ap)
     call free_sparse_matrix(problem%Av)
     call free_sparse_matrix(problem%Minv_p)
@@ -1071,6 +1161,8 @@ contains
     !    eval_backward_source=eval_P_received-eval_data_P
     eval_backward_source=eval_data_P
 
+    write(37,*) t,eval_data_P
+    
   end function eval_backward_source
 
   subroutine eval_RHS(RHSp,RHSv,problem,t)
@@ -1104,14 +1196,14 @@ contains
          ! gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
          ! RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
           
-           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
-          ! RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
-        RHSv((problem%receiver_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha) 
+          gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
+         !  RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
+        RHSv((problem%receiver_loc-1)*problem%DoF+2)=gg*(-1.0-0.0*problem%alpha) 
        end if
     end if
 
-   RHSp=sparse_matmul(problem%Minv_p,RHSp)
-   RHSv=sparse_matmul(problem%Minv_v,RHSv)
+    RHSp=sparse_matmul(problem%Minv_p,RHSp)
+    RHSv=sparse_matmul(problem%Minv_v,RHSv)
   end subroutine eval_RHS
 
 end module m_adjoint

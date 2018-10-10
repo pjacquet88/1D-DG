@@ -1,4 +1,4 @@
  load "trace1.gnuplot"
- n=         9292
+ n=         20361
  a=           100
  load "trace2.gnuplot"

@@ -26,6 +26,11 @@ module m_acoustic
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
      real                            :: epsilon      ! precision for power method algo.
+     real,dimension(:),allocatable   :: RHSv        
+     real,dimension(:),allocatable   :: RHSp        
+     real,dimension(:),allocatable   :: RHSv_half        
+     real,dimension(:),allocatable   :: RHSp_half        
+     
      !----------- MATRICES ---------------------------
      type(sparse_matrix)             :: Ap,App       
      type(sparse_matrix)             :: Av
@@ -35,9 +40,6 @@ module m_acoustic
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
      integer                         :: n_time_step   ! nb of time step
-
-     real,dimension(:),allocatable   :: RHSv
-     real,dimension(:),allocatable   :: RHSp
   end type acoustic_problem
   
   real,dimension(15)                 :: xx,weight
@@ -243,9 +245,6 @@ contains
        call init_acoustic_operator(problem)
     end if
 
-    allocate(problem%RHSv(nb_elem*DoF))
-    allocate(problem%RHSp(nb_elem*DoF))
-    
     problem%n_time_step=int(problem%final_time/problem%dt)+1
     problem%final_time=problem%dt*problem%n_time_step
     ! here I change the final time to fit frames of the forward and the backward
@@ -270,7 +269,15 @@ contains
     else
        print*,'The problem is solved with Lagrange elements'
     end if
-    print*,'------------------------------------------------------------'    
+    print*,'------------------------------------------------------------'
+
+    allocate(problem%RHSv(nb_elem*DoF))
+    allocate(problem%RHSp(nb_elem*DoF))
+    if (time_scheme.eq.'RK4') then
+       allocate(problem%RHSv_half(nb_elem*DoF))
+       allocate(problem%RHSp_half(nb_elem*DoF))
+    end if
+   
   end subroutine init_acoustic_problem
 
   
@@ -341,6 +348,7 @@ contains
   subroutine init_minv_loc(minv_loc,m_loc)
     real,dimension(:,:),intent(out) :: minv_loc
     real,dimension(:,:),intent(in)  :: m_loc
+    minv_loc=0.0
     minv_loc=LU_inv(m_loc)
   end subroutine init_minv_loc
 
@@ -351,7 +359,7 @@ contains
     integer            ,intent(in)  :: nb_elem
 
     integer :: i,DoF
-
+    m_glob=0.0
     DoF=size(m_loc,1)
         
     do i=1,nb_elem
@@ -390,6 +398,8 @@ contains
     real,dimension(DoF,DoF)         :: m_loc_abc1,m_loc_abc2
     real,dimension(DoF,DoF)         :: minv_loc,minv_loc_abc1,minv_loc_abc2
 
+    minv_glob_abc=0.0
+    
     m_loc_abc1=m_loc
     m_loc_abc2=m_loc
 
@@ -444,6 +454,7 @@ contains
     real,dimension(DoF)             :: bpol,dbpol
     real,dimension(DoF)             :: dlpol
 
+    s_loc=0.0
     
     if (bernstein) then
        s_loc=D1-D0
@@ -466,6 +477,7 @@ contains
     integer            ,intent(in)  :: nb_elem
     integer :: i,DoF
 
+    s_glob=0.0
     DoF=size(s_loc,1)
 
 
@@ -746,7 +758,7 @@ contains
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
-    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
+    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
@@ -893,13 +905,11 @@ contains
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
-    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
+    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
     print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
          problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
     print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
 
-
-       ! print*,'%%%%%%%%%%%%%% JE SUIS PASSE PAR LA%%%%%%%%%%%%%%%%%%%%%%'
        ! call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne,  &
        !      problem%Ap%IA,problem%Ap%JA,problem%Ap%Values)
        ! call free_sparse_matrix(problem%Ap)
@@ -942,11 +952,15 @@ contains
 
     else if (problem%time_scheme.eq.'RK4') then
 
+       
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
-       problem%RHSv=FU_0
-       problem%RHSp=FP_0
+
        call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
+       problem%RHSv_half=FU_half 
+       problem%RHSp_half=FP_half      
        call eval_RHS(FP_1,FU_1,problem,t)
+       problem%RHSv=FU_1
+       problem%RHSp=FP_1
 
        call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
                         FP_0,FP_half,FP_1,FU_0,FU_half,FU_1)
@@ -976,9 +990,7 @@ contains
                       RHSp1,RHSv1,                                              &
                       RHSp2,RHSv2,                                              &
                       problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
-
-
-       
+      
     end if
   end subroutine one_forward_step
 
@@ -1004,6 +1016,10 @@ contains
     deallocate(problem%velocity)
     deallocate(problem%RHSv)
     deallocate(problem%RHSp)
+    if (problem%time_scheme.eq.'RK4') then
+    deallocate(problem%RHSv_half)
+    deallocate(problem%RHSp_half)
+    end if
     call free_sparse_matrix(problem%Ap)
     call free_sparse_matrix(problem%Av)
     call free_sparse_matrix(problem%Minv_p)
@@ -1114,14 +1130,14 @@ contains
        end if
 
        if (problem%signal.eq.'flat') then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+          !gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+          gg=sin(4*PI*t)
           RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
        end if
     end if
 
     RHSp=sparse_matmul(problem%Minv_p,RHSp)
     RHSv=sparse_matmul(problem%Minv_v,RHSv)
-
 
   end subroutine eval_RHS
 

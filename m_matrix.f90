@@ -59,7 +59,7 @@ contains
 
     ! DGETRI computes the inverse of a matrix using the LU factorization
     ! computed by DGETRF.
-    ! call SGETRI(n, LU_inv, n, ipiv, work, n, info)
+   !  call SGETRI(n, LU_inv, n, ipiv, work, n, info)
     call DGETRI(n, LU_inv, n, ipiv, work, n, info)
 
     if (info /= 0) then
@@ -151,7 +151,7 @@ contains
 
   subroutine Sparse2Full(sparse,full)
     type(sparse_matrix),intent(in)    :: sparse
-    real,dimension(:,:),allocatable,intent(out) :: full
+    real,dimension(:,:),allocatable,intent(inout) :: full
 
     integer :: i,j,nb_value,iia
     
@@ -164,17 +164,22 @@ contains
           full(i,sparse%JA(nb_value+iia))=sparse%Values(nb_value+iia)
        end do
     end do
+
+!    deallocate(full)
+    
   end subroutine Sparse2Full
     
   subroutine transpose_sparse(sparse,t_sparse)
     type(sparse_matrix),intent(in)  :: sparse
-    type(sparse_matrix),intent(out) :: t_sparse
+    type(sparse_matrix),intent(inout) :: t_sparse
     real,dimension(:,:),allocatable :: full
 
     call init_sparse_matrix(t_sparse,sparse%NNN,sparse%nb_ligne)
-
     call Sparse2Full(sparse,full)
     call Full2Sparse(transpose(full),t_sparse)
+
+    deallocate(full)
+    
   end subroutine transpose_sparse
 
 
@@ -202,6 +207,8 @@ contains
     call Sparse2Full(B,B_full)
     C_full=matmul(A_full,B_full)
     call Full2Sparse(C_full,sparse_MM)
+
+    deallocate(A_full,B_full,C_full)
 
   end function sparse_MM
 

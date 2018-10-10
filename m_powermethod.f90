@@ -42,6 +42,8 @@ contains
        ! end if
 
     end do
+    deallocate(z,q1,q2)
+
   end subroutine power_method
 
   subroutine power_method_sparse(A,max_value,k_max,epsilon)
@@ -71,7 +73,10 @@ contains
        ! end if 
 
     end do
-  end subroutine power_method_sparse
+    
+    deallocate(z,q1,q2)
+
+ end subroutine power_method_sparse
 
 
   function norm(v)

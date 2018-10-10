@@ -34,7 +34,7 @@ module m_adjoint_test
   
 
     subroutine init_adjoint_test(test,n_time_step,time_scheme,dt,Ap,Av,App,       &
-         M,Minv,nb_elem,DoF,dx)
+         M,Minv,nb_elem,DoF,dx,FP,FU,FP_half,FU_half,DP,DU)
     type(t_adjoint_test),intent(inout) :: test
     integer             ,intent(in)    :: n_time_step
     character(len=*)    ,intent(in)    :: time_scheme
@@ -47,6 +47,9 @@ module m_adjoint_test
     integer             ,intent(in)    :: nb_elem
     integer             ,intent(in)    :: DoF
     real                ,intent(in)    :: dx
+    real,dimension(:,:) ,optional      :: FP,FU
+    real,dimension(:,:) ,optional      :: FP_half,FU_half
+    real,dimension(:,:) ,optional      :: DP,DU
 
     integer :: i,j
     type(sparse_matrix) :: Id
@@ -67,13 +70,13 @@ module m_adjoint_test
     test%M=M
     test%Minv=Minv
 
-    test%tApp=sparse_matmul(test%tApp,test%M)
-    test%tAp=sparse_matmul(test%tAp,test%M)
-    test%tAv=sparse_matmul(test%tAv,test%M)
+    ! test%tApp=sparse_matmul(test%tApp,test%M)
+    ! test%tAp=sparse_matmul(test%tAp,test%M)
+    ! test%tAv=sparse_matmul(test%tAv,test%M)
 
-    test%tApp=sparse_matmul(test%Minv,test%tApp)
-    test%tAp=sparse_matmul(test%Minv,test%tAp)
-    test%tAv=sparse_matmul(test%Minv,test%tAv)
+    ! test%tApp=sparse_matmul(test%Minv,test%tApp)
+    ! test%tAp=sparse_matmul(test%Minv,test%tAp)
+    ! test%tAv=sparse_matmul(test%Minv,test%tAv)
 
     
     allocate(test%P(0:n_time_step,test%size_v),test%P2(0:n_time_step,test%size_v))
@@ -89,6 +92,69 @@ module m_adjoint_test
     ! call random_number(test%U)
     ! call random_number(test%QP)
     ! call random_number(test%QU)
+
+    if (present(FP)) then
+
+       do i=0,n_time_step
+          do j=1,test%size_v
+             test%FP(i,j)=FP(j,i+1)
+             test%FU(i,j)=FU(j,i+1)
+             test%DP(i,j)=DP(j,i+1)
+             test%DU(i,j)=DU(j,i+1)
+          end do
+       end do
+       
+       do i=1,n_time_step
+          do j=1,test%size_v
+             test%FP_half(i,j)=FP_half(j,i)
+             test%FU_half(i,j)=FU_half(j,i)
+          end do
+       end do
+
+       ! test%FP=0.0
+       ! test%FU=0.0
+       ! test%FP_half=0.0
+       ! test%FU_half=0.0
+
+       ! test%DP=0.0
+       ! test%DU=0.0
+       ! test%DP_half=0.0
+       ! test%DU_half=0.0
+            
+       ! call random_number(test%FP(400,100))
+       ! call random_number(test%FP_half(400,100))
+       ! call random_number(test%FU(400,100))
+       ! call random_number(test%FU_half(:,100))
+       ! call random_number(test%DP(n_time_step-400,100))
+       ! call random_number(test%DP_half(n_time_step-400,100))
+       ! call random_number(test%DU(n_time_step-400,100))
+       ! call random_number(test%DU_half(n_time_step-400,100))
+
+       
+       test%P=0.0
+       test%U=0.0
+       test%QP=0.0
+       test%QU=0.0
+
+       if (test%time_scheme.eq.'RK4') then
+          test%FP(0,:)=0.0
+          test%FU(0,:)=0.0
+          test%DP(n_time_step,:)=0.0
+          test%DU(n_time_step,:)=0.0
+       else if (test%time_scheme.eq.'AB3') then
+          test%FP(0:1,:)=0.0
+          test%FU(0:1,:)=0.0
+          test%DP(n_time_step:n_time_step-1,:)=0.0
+          test%DU(n_time_step:n_time_step-1,:)=0.0
+
+          test%FP(0,:)=0.0
+          test%FU(0,:)=0.0
+          test%DP(n_time_step,:)=0.0
+          test%DU(n_time_step,:)=0.0       
+       end if
+
+    
+    else
     test%P=0.0
     test%U=0.0
     test%QP=0.0
@@ -168,8 +234,8 @@ module m_adjoint_test
     !    test%DP_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
     !    test%DU_half(i,:)=n_time_step-i+0.5!real((i-0.5)/n_time_step)-0.5
     ! end do
-    
-  end subroutine init_adjoint_test
+ end if
+end subroutine init_adjoint_test
 
   
   subroutine forward_test(test)
@@ -784,7 +850,20 @@ module m_adjoint_test
     end do
   end function inner_product_M
   
-  
-  
+  function norm_test(V)
+    real,dimension(:,:),intent(in) :: v
+    integer :: i,j
+    real    :: norm_test
 
+    norm_test=0.0
+    
+    do i=1,size(v,2)
+       do j=1,size(v,1)
+          norm_test=norm_test+v(j,i)**2
+       end do
+    end do
+    norm_test=sqrt(norm_test)
+  end function norm_test
+
+    
 end module m_adjoint_test
