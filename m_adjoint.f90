@@ -55,10 +55,10 @@ module m_adjoint
   real,parameter :: PI=acos(-1.0)
 
   public  :: init_adjoint_problem,init_adjoint_operator,all_backward_step,one_backward_step,            &
-             free_adjoint_problem
+             free_adjoint_problem,Int_lxl,Int_bxb
 
   private :: xx,weight,solution,PI,                                             &
-             init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
+             init_quadrature,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
              init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_source
   
@@ -231,7 +231,7 @@ contains
        print*,'Density input size does not correspond'
        STOP
     end if
-    allocate(problem%velocity(DoF*nb_elem),problem%density(DoF*nb_elem))
+    allocate(problem%velocity(nb_elem),problem%density(nb_elem))
 
     dv=max(nb_elem/size(velocity),1)
     do i=1,size(velocity)
@@ -268,27 +268,27 @@ contains
     problem%final_time=problem%dt*problem%n_time_step
     ! here I change the final time to fit frames of the forward and the backward
 
-    print*,'Ap Av done'
-    call init_UP(problem)
-    print*,'nb_elem              ::',nb_elem
-    print*,'DoF                  ::',DoF
-    print*,'total_length         ::',total_length
-    print*,'final_time           ::',problem%final_time
-    print*,'dx                   ::',problem%dx
-    print*,'dt                   ::',problem%dt
-    print*,'n_time_step          ::',problem%n_time_step
-    print*,'Boundary Condition   ::','   ',boundaries
-    print*,'Time scheme          ::' ,'   ',time_scheme
-    print*,'Penalisation alpha   ::',alpha
-    print*,'Max Iter Power-Method::',k_max
-    print*,'Epsilon Power-Method ::',epsilon
-    print*,' '
-    if (bernstein) then
-       print*,'The problem is solved with Bernstein elements'
-    else
-       print*,'The problem is solved with Lagrange elements'
-    end if
-    print*,'------------------------------------------------------------'    
+    ! print*,'Ap Av done'
+    ! call init_UP(problem)
+    ! print*,'nb_elem              ::',nb_elem
+    ! print*,'DoF                  ::',DoF
+    ! print*,'total_length         ::',total_length
+    ! print*,'final_time           ::',problem%final_time
+    ! print*,'dx                   ::',problem%dx
+    ! print*,'dt                   ::',problem%dt
+    ! print*,'n_time_step          ::',problem%n_time_step
+    ! print*,'Boundary Condition   ::','   ',boundaries
+    ! print*,'Time scheme          ::' ,'   ',time_scheme
+    ! print*,'Penalisation alpha   ::',alpha
+    ! print*,'Max Iter Power-Method::',k_max
+    ! print*,'Epsilon Power-Method ::',epsilon
+    ! print*,' '
+    ! if (bernstein) then
+    !    print*,'The problem is solved with Bernstein elements'
+    ! else
+    !    print*,'The problem is solved with Lagrange elements'
+    ! end if
+    ! print*,'------------------------------------------------------------'    
 
 
     allocate(problem%data_P(size(data_P,1),size(data_P,2)))
@@ -412,7 +412,7 @@ contains
     do i=1,nb_elem
        minv_glob(DoF*(i-1)+1:DoF*i,DoF*(i-1)+1:DoF*i)=minv_loc
     end do
-    
+
   end subroutine init_minv_glob
 
   subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity_beg,   &
@@ -661,7 +661,7 @@ contains
   end subroutine init_DpDv
 
 
-  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme)
+  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme,velocity)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
     real               ,intent(out) :: dt
@@ -669,6 +669,7 @@ contains
     real               ,intent(in)  :: epsilon
     integer            ,intent(in)  :: nb_elem
     character(len=*)   ,intent(in)  :: time_scheme
+    real,dimension(:)  ,intent(in)  :: velocity
     type(sparse_matrix)             :: sparse_A
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
@@ -676,19 +677,28 @@ contains
     real,parameter                  :: alpha=1.00
     real                            :: cfl
 
+    dt=0.0
+    
     A=matmul(Ap,Av)
+
+    ! print*,'Ap',minval(Ap),maxval(Ap)
+    ! print*,'Av',minval(Av),maxval(Av)
+    !  print*,'A',minval(A),maxval(A)
+    ! print*,'velocity',minval(velocity),maxval(velocity),size(velocity)
 
     call Full2Sparse(A,sparse_A)
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=alpha/(sqrt(abs(max_value)))
+!    print*,'dt1',dt
+    
     call free_sparse_matrix(sparse_A)
     A=matmul(Av,Ap)
     call Full2Sparse(matmul(Av,Ap),sparse_A)
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
-    dt=dt*1.0  !CFL for LF
-
+    dt=dt*1.0/(maxval(velocity))  !CFL for LF
+ !   print*,'dt2',dt
     if (time_scheme.eq.'LF4') then
        dt=2.7*dt
     else if (time_scheme.eq.'RK4') then
@@ -739,7 +749,7 @@ contains
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                     problem%k_max,problem%epsilon,problem%nb_elem,              &
-                    problem%time_scheme)
+                    problem%time_scheme,problem%velocity)
 
        if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
@@ -770,7 +780,7 @@ contains
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_scheme)
+                     problem%time_scheme,problem%velocity)
 
        if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
@@ -791,11 +801,11 @@ contains
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
-    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
-    print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
-         problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
-                                                           problem%Ap%nb_ligne**2
+    ! print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
+    ! print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
+    !      problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
+    ! print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
+    !                                                        problem%Ap%nb_ligne**2
     App_full=0.0
     if (problem%time_scheme.eq.'LF') then
        do i=1,size(App_full,1)
@@ -856,6 +866,17 @@ contains
                    problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
 
+    ! print*,'m_loc',minval(m_loc),maxval(m_loc)
+    ! print*,'m_glob',minval(m_glob),maxval(m_glob)
+    ! print*,'minv_loc',minval(minv_loc),maxval(minv_loc)
+    ! print*,'minv_glob',minval(minv_glob),maxval(minv_glob)
+    ! print*,'s_loc',minval(s_loc),maxval(s_loc)
+    ! print*,'s_glob',minval(s_glob),maxval(s_glob)
+    ! print*,'Fp',minval(Fp),maxval(Fp)
+    ! print*,'Fv',minval(Fv),maxval(Fv)
+    ! print*,'Dp',minval(Dp),maxval(Dp)
+    ! print*,'Dv',minval(Dv),maxval(Dv)
+
     Ap_full=0.0
     Av_full=0.0
     App_full=0.0
@@ -863,12 +884,15 @@ contains
     call Full2Sparse(minv_glob,problem%Minv)
     
     if (problem%bernstein) then
-
+       
        Av_full=(s_glob+matmul(minv_glob,Fv))
        Av_full=matmul(Dv,Av_full)
 
+
+
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
-            problem%k_max,problem%epsilon,problem%nb_elem,problem%time_scheme)
+                    problem%k_max,problem%epsilon,problem%nb_elem,              &
+                    problem%time_scheme,problem%velocity)
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
                                problem%velocity(1),problem%velocity(nb_elem),   &
@@ -917,7 +941,7 @@ contains
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
                      problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_scheme)
+                     problem%time_scheme,problem%velocity)
 
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
@@ -959,10 +983,10 @@ contains
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
     
-    print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
-    print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x',              &
-         problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
+    ! print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
+    ! print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x',              &
+    !      problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
+    ! print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
     
     if (problem%strategy.eq.'DTA') then
        call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne, &
@@ -1125,15 +1149,20 @@ contains
     real                           :: t2
 
     t2=final_time-t
-
-    i=2
+   !t2=t
+    
+    i=1
     do while ((P_received(i,1).le.t2).and.(i.ne.size(data_P,1)))
        i=i+1
     end do
     i=i-1
 
+    ! do i=1,size(P_received,1)
+    !    write(16,*) P_received(i,1),P_received(i,2)
+    ! end do
+    
     if (i.eq.0) then
-       print*,'test',i,t,t2
+       print*,'test',i,t,t2,P_received(1,1)
     end if
 
     eval_P_received=(t2-P_received(i,1))*P_received(i+1,2)       &
@@ -1158,11 +1187,13 @@ contains
          -data_P(i,1))
 
 
-    !    eval_backward_source=eval_P_received-eval_data_P
-    eval_backward_source=eval_data_P
+    eval_backward_source=eval_P_received-eval_data_P
+   ! eval_backward_source=eval_data_P
 
-    write(37,*) t,eval_data_P
-    
+    ! write(35,*) t,eval_data_P
+    ! write(36,*) t,eval_P_received
+    ! write(37,*) t,eval_backward_source
+     
   end function eval_backward_source
 
   subroutine eval_RHS(RHSp,RHSv,problem,t)
@@ -1198,7 +1229,7 @@ contains
           
           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
          !  RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
-        RHSv((problem%receiver_loc-1)*problem%DoF+2)=gg*(-1.0-0.0*problem%alpha) 
+        RHSv((problem%receiver_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha) 
        end if
     end if
 
