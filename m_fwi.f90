@@ -53,6 +53,7 @@ module m_fwi
      integer                         :: receiver_loc
      character(len=20)               :: strategy
      character(len=20)               :: scalar_product
+     logical                         :: adjoint_test
 
      logical                         :: animation
   end type t_fwi
@@ -63,7 +64,7 @@ contains
   subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data_P,data_U,   &
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
                       bernstein,k_max,epsilon,source_loc,receiver_loc,strategy, &
-                      scalar_product,animation)
+                      scalar_product,animation,adjoint_test)
     type(t_fwi)        ,intent(inout) :: fwi
     integer            ,intent(in)    :: nb_iter
     real,dimension(:)  ,intent(in)    :: velocity_model
@@ -84,6 +85,7 @@ contains
     character(len=*)   ,intent(in)    :: strategy
     character(len=*)   ,intent(in)    :: scalar_product
     logical            ,intent(in)    :: animation
+    logical            ,intent(in)    :: adjoint_test
     
     integer :: i
     real    :: epsilon_vp
@@ -108,11 +110,11 @@ contains
 
 
     do i=34,66
-       fwi%velocity_model(i)=1.0!+epsilon_vp
+       fwi%velocity_model(i)=1.0!epsilon_vp
        fwi%density_model(i)=1.0!+10**(-5)
     end do
     
-    do i=66,nb_elem
+    do i=67,nb_elem
        fwi%velocity_model(i)=1.0!+epsilon_vp
        fwi%density_model(i)=1.0!+10**(-5)
     end do
@@ -141,6 +143,7 @@ contains
     fwi%strategy=strategy
     fwi%scalar_product=scalar_product
     fwi%animation=animation
+    fwi%adjoint_test=adjoint_test
     
     fwi%signal='flat'
     fwi%boundaries='ABC'
@@ -202,16 +205,17 @@ contains
     fwi%QU(:,0)=0
     fwi%P_received(:,:)=0.0
     fwi%U_received(:,:)=0.0
- 
-     ! allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
-     !allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
- !   allocate(fwi%FP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
- !   allocate(fwi%FU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
- !   allocate(fwi%FP_half(fwi%DoF*fwi%nb_elem,1:fwi%n_time_step))
- !   allocate(fwi%FU_half(fwi%DoF*fwi%nb_elem,1:fwi%n_time_step))
-!    allocate(fwi%GP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
-!    allocate(fwi%GU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     
+    if (fwi%adjoint_test) then
+       ! allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       ! allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       allocate(fwi%FP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       allocate(fwi%FU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       allocate(fwi%FP_half(fwi%DoF*fwi%nb_elem,1:fwi%n_time_step))
+       allocate(fwi%FU_half(fwi%DoF*fwi%nb_elem,1:fwi%n_time_step))
+       allocate(fwi%GP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       allocate(fwi%GU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    end if
 
     current_time_step=0
     t=0
@@ -224,40 +228,44 @@ contains
        fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+2)
        fwi%U_received(current_time_step,1)=t
        fwi%U_received(current_time_step,2)=fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+2)
-     !  fwi%FP(:,current_time_step)=fwi%forward%RHSp
-     !  fwi%FU(:,current_time_step)=fwi%forward%RHSv
-       if (fwi%time_scheme.eq.'RK4') then
-     !  fwi%FP_half(:,current_time_step)=fwi%forward%RHSp_half
-     !  fwi%FU_half(:,current_time_step)=fwi%forward%RHSv_half
+       
+       if (fwi%adjoint_test) then
+          fwi%FP(:,current_time_step)=fwi%forward%RHSp
+          fwi%FU(:,current_time_step)=fwi%forward%RHSv
+          if (fwi%time_scheme.eq.'RK4') then
+             fwi%FP_half(:,current_time_step)=fwi%forward%RHSp_half
+             fwi%FU_half(:,current_time_step)=fwi%forward%RHSv_half
+          end if
        end if
     end do
-   ! fwi%FP(:,fwi%forward%n_time_step)=0.0
-   ! fwi%FU(:,fwi%forward%n_time_step)=0.0
-    ! fwi%FP(:,0)=0.0
-    ! fwi%FU(:,0)=0.0
 
-    !call fwi_extract_g(fwi)
-    
+    if (fwi%adjoint_test) then
+       fwi%FP(:,fwi%forward%n_time_step)=0.0
+       fwi%FU(:,fwi%forward%n_time_step)=0.0
+       fwi%FP(:,0)=0.0
+       fwi%FU(:,0)=0.0
+       call fwi_extract_g(fwi)
+    end if
+
     if (fwi%animation) then
        do i=0,fwi%n_time_step
-          if (modulo(i,1).eq.0) then
+          if (modulo(i,10).eq.0) then
              call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
           else if (i.eq.0) then
              call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'P')
           end if
-          ! write(18,*) i,maxloc(abs(fwi%P(:,i)))
-          ! write(17,*) i,maxval(abs(fwi%P(:,i)))
        end do
     end if
 
-    ! test%M=fwi%forward%M
-    ! test%Minv=fwi%forward%Minv
-    ! test%Ap=fwi%forward%Ap
-    ! test%Av=fwi%forward%Av
-    ! test%App=fwi%forward%App
-
+    if (fwi%adjoint_test) then
+       test%M=fwi%forward%M
+       test%Minv=fwi%forward%Minv
+       test%Ap=fwi%forward%Ap
+       test%Av=fwi%forward%Av
+       test%App=fwi%forward%App
+    end if
+    
     call free_acoustic_problem(fwi%forward)
-    !print*,'Initialization done'
     
     ! print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     ! print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
@@ -278,9 +286,11 @@ contains
 
     fwi%n_time_step=fwi%backward%n_time_step
 
-
-    !allocate(fwi%DP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
-    !allocate(fwi%DU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    if (fwi%adjoint_test) then
+       allocate(fwi%DP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+       allocate(fwi%DU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    end if
+    
     fwi%QP(:,fwi%n_time_step)=0
     fwi%QU(:,fwi%n_time_step)=0
 
@@ -293,31 +303,39 @@ contains
        call one_backward_step(fwi%backward,t)
        fwi%QP(:,current_time_step)=fwi%backward%P
        fwi%QU(:,current_time_step)=fwi%backward%U
-       ! if (fwi%time_scheme.eq.'RK4') then
-       !    fwi%DP(:,current_time_step)=fwi%backward%RHSp
-       !    fwi%DU(:,current_time_step)=fwi%backward%RHSv
-       ! else if (fwi%time_scheme.eq.'AB3') then
-       !    fwi%DP(:,current_time_step)=fwi%backward%RHSp
-       !    fwi%DU(:,current_time_step)=fwi%backward%RHSv
-       ! end if
+
+
+       if (fwi%adjoint_test) then
+          if (fwi%time_scheme.eq.'RK4') then
+             fwi%DP(:,current_time_step)=fwi%backward%RHSp
+             fwi%DU(:,current_time_step)=fwi%backward%RHSv
+          else if (fwi%time_scheme.eq.'AB3') then
+             fwi%DP(:,current_time_step)=fwi%backward%RHSp
+             fwi%DU(:,current_time_step)=fwi%backward%RHSv
+          end if
+       end if
     end do
-    
-    call free_adjoint_problem(fwi%backward)
-!        fwi%DP(:,0)=0.0
-!        fwi%DU(:,0)=0.0
-    ! fwi%DP(:,fwi%backward%n_time_step)=0.0
-    ! fwi%DU(:,fwi%backward%n_time_step)=0.0
+
+    if (fwi%adjoint_test) then
+       fwi%DP(:,0)=0.0
+       fwi%DU(:,0)=0.0
+       fwi%DP(:,fwi%backward%n_time_step)=0.0
+       fwi%DU(:,fwi%backward%n_time_step)=0.0
+    end if
+
     
     if (fwi%animation) then
        ! print*,'Calculus done'
        do i=0,fwi%n_time_step
-          if (modulo(i,1).eq.0) then
-             call print_vect(fwi%QP(:,fwi%n_time_step-i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
+          if (modulo(i,10).eq.0) then
+             call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
           else if (i.eq.0) then
-             call print_vect(fwi%QP(:,fwi%n_time_step-i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
+             call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,fwi%bernstein,i,'QP')
           end if
        end do
     end  if
+
+    
     ! RTM=0.0
     ! do i=1,size(RTM)
     !    do j=0,fwi%n_time_step
@@ -330,23 +348,27 @@ contains
     !    write(23,*) RTM(i)
     ! end do
     ! close(23)
+    
+    if (fwi%adjoint_test) then
+       print*,'%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+       print*,'Inner Product PU/DPDU',inner_product(fwi%P,fwi%U,fwi%DP,fwi%DU)
+       print*,'Inner Product QPQU/GPGU',inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU)
+       print*,'Difference relative :',(inner_product(fwi%P,fwi%U,fwi%DP,fwi%DU)-   &
+            inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU))/&
+            inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU)
 
+       print*,'test',size(fwi%P,1),size(fwi%P,2)
 
-    ! print*,'%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    ! print*,'Inner Product PU/DPDU',inner_product(fwi%P,fwi%U,fwi%DP,fwi%DU)
-    ! print*,'Inner Product QPQU/GPGU',inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU)
-    ! print*,'Difference relative :',(inner_product(fwi%P,fwi%U,fwi%DP,fwi%DU)-   &
-    !                                 inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU))/&
-    !                                 inner_product(fwi%QP,fwi%QU,fwi%GP,fwi%GU)
-
-    !     print*,'M Inner Product PU/DPDU',inner_product_M(fwi%P,fwi%U,fwi%DP,fwi%DU,fwi%backward%M)
-    ! print*,'M Inner Product QPQU/GPGU',inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,fwi%backward%M)
-    ! print*,'Difference relative :',(inner_product_M(fwi%P,fwi%U,fwi%DP,fwi%DU,fwi%backward%M)-   &
-    !                                 inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,fwi%backward%M))/&
-    !                                 inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,fwi%backward%M)
-    ! print*,'%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-
-
+       print*,'M Inner Product PU/DPDU',inner_product_M(fwi%P,fwi%U,fwi%DP,fwi%DU,test%M)
+       print*,'M Inner Product QPQU/GPGU',inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,test%M)
+       print*,'Difference relative :',(inner_product_M(fwi%P,fwi%U,fwi%DP,fwi%DU,test%M)-   &
+                                       inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,test%M))/&
+                                       inner_product_M(fwi%QP,fwi%QU,fwi%GP,fwi%GU,test%M)
+       print*,'%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    end if
+    
+    call free_adjoint_problem(fwi%backward)
+    
     ! print*,'test gradient'
     call gradient_computation(fwi)
     ! if (fwi%strategy.eq.'DTA') then
@@ -373,35 +395,38 @@ contains
 
     
     print*,'%%%% COST FUNCTION %%%%%'
-    call cost_function(fwi%P_received,fwi%data_P,fwi%final_time)
+    call cost_function(fwi%P_received,fwi%data_P,fwi%final_time,fwi%current_iter)
     deallocate(fwi%P)
     deallocate(fwi%U)
     deallocate(fwi%QP)
     deallocate(fwi%QU)
     deallocate(fwi%P_received)
     deallocate(fwi%U_received)
-     ! print*,'%%%%%%%%%%%%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%'
-     ! call  init_adjoint_test(test,fwi%n_time_step,fwi%time_scheme,fwi%backward%dt,&
-     !      test%Ap,test%Av,test%App,test%M,test%Minv,&
-     !      fwi%nb_elem,fwi%DoF,fwi%backward%dx,fwi%FP,fwi%FU,fwi%FP_half,fwi%FU_half,fwi%DP,fwi%DU)
-     ! call forward_test(test)
-     ! call extract_g(test)
-     ! call backward_test(test)
-     ! print*,'Inner Product PU/DPDU',inner_product(test%P,test%U,test%DP,test%DU)
-     ! print*,'Inner Product QPQU/GPGU',inner_product(test%QP,test%QU,test%GP,test%GU)
-     ! print*,'M Inner Product PU/DPDU',inner_product_M(test%P,test%U,test%DP,test%DU,test%M)
-     ! print*,'M Inner Product QPQU/GPGU',inner_product_M(test%QP,test%QU,test%GP,test%GU,test%M)
-     ! print*,'norm test P',(norm_test(fwi%P)-norm_test(test%P))/norm_test(test%P)
-     ! print*,'norm test U',(norm_test(fwi%U)-norm_test(test%U))/norm_test(test%U)
-     ! print*,'norm test QP',(norm_test(fwi%QP)-norm_test(test%QP))/norm_test(test%QP)
-     ! print*,'norm test QU',(norm_test(fwi%QU)-norm_test(test%QU))/norm_test(test%QU)
-     ! print*,'norm test FP',norm_test(fwi%FP)-norm_test(test%FP)
-     ! print*,'norm test FU',norm_test(fwi%FU)-norm_test(test%FU)
-     ! print*,'norm test FP_half',norm_test(fwi%FP_half)-norm_test(test%FP_half)
-     ! print*,'norm test FU_half',norm_test(fwi%FU_half)-norm_test(test%FU_half)
-     ! print*,'norm test DP',norm_test(fwi%DP)-norm_test(test%DP)     
-     ! print*,'norm test DU',norm_test(fwi%DU)-norm_test(test%DU)     
-     ! print*,'%%%%%%%%%%%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%'
+
+    
+     print*,'%%%%%%%%%%%%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%'
+     call  init_adjoint_test(test,fwi%n_time_step,fwi%time_scheme,fwi%backward%dt,&
+          test%Ap,test%Av,test%App,test%M,test%Minv,&
+          fwi%nb_elem,fwi%DoF,fwi%backward%dx,fwi%FP,fwi%FU,fwi%FP_half,fwi%FU_half,fwi%DP,fwi%DU)
+     call forward_test(test)
+     call extract_g(test)
+     call backward_test(test)
+     print*,'Inner Product PU/DPDU',inner_product(test%P,test%U,test%DP,test%DU)
+     print*,'Inner Product QPQU/GPGU',inner_product(test%QP,test%QU,test%GP,test%GU)
+     print*,'M Inner Product PU/DPDU',inner_product_M(test%P,test%U,test%DP,test%DU,test%M)
+     print*,'M Inner Product QPQU/GPGU',inner_product_M(test%QP,test%QU,test%GP,test%GU,test%M)
+     print*,'norm test P',(norm_test(fwi%P)-norm_test(test%P))/norm_test(test%P)
+     print*,'norm test U',(norm_test(fwi%U)-norm_test(test%U))/norm_test(test%U)
+     print*,'norm test QP',(norm_test(fwi%QP)-norm_test(test%QP))/norm_test(test%QP)
+     print*,'norm test QU',(norm_test(fwi%QU)-norm_test(test%QU))/norm_test(test%QU)
+     print*,'norm test FP',norm_test(fwi%FP)-norm_test(test%FP)
+     print*,'norm test FU',norm_test(fwi%FU)-norm_test(test%FU)
+     print*,'norm test FP_half',norm_test(fwi%FP_half)-norm_test(test%FP_half)
+     print*,'norm test FU_half',norm_test(fwi%FU_half)-norm_test(test%FU_half)
+     print*,'norm test DP',norm_test(fwi%DP)-norm_test(test%DP)     
+     print*,'norm test DU',norm_test(fwi%DU)-norm_test(test%DU)   
+     
+     print*,'%%%%%%%%%%%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%'
 
     !--------------------- Animation ----------------------------------------------
   !n_frame=int(forward%n_time_step/forward%n_display)
@@ -503,23 +528,23 @@ contains
              end_node=i*DoF
              dtu=(fwi%U(beg_node:end_node,j+1)-fwi%U(beg_node:end_node,j))/(fwi%dt)
              dtp=(fwi%P(beg_node:end_node,j+1)-fwi%P(beg_node:end_node,j))/(fwi%dt)
-             qp=fwi%QP(beg_node:end_node,fwi%n_time_step-j)
-             qu=fwi%QU(beg_node:end_node,fwi%n_time_step-j)
+             qp=fwi%QP(beg_node:end_node,j)
+             qu=fwi%QU(beg_node:end_node,j)
 
           else if (j.eq.fwi%n_time_step) then
              beg_node=(i-1)*DoF+1
              end_node=i*DoF
              dtu=(fwi%U(beg_node:end_node,j)-fwi%U(beg_node:end_node,j-1))/(fwi%dt)
              dtp=(fwi%P(beg_node:end_node,j)-fwi%P(beg_node:end_node,j-1))/(fwi%dt)
-             qp=fwi%QP(beg_node:end_node,fwi%n_time_step-j)
-             qu=fwi%QU(beg_node:end_node,fwi%n_time_step-j)
+             qp=fwi%QP(beg_node:end_node,j)
+             qu=fwi%QU(beg_node:end_node,j)
           else
              beg_node=(i-1)*DoF+1
              end_node=i*DoF
              dtu=(fwi%U(beg_node:end_node,j+1)-fwi%U(beg_node:end_node,j-1))/(2*fwi%dt)
              dtp=(fwi%P(beg_node:end_node,j+1)-fwi%P(beg_node:end_node,j-1))/(2*fwi%dt)
-             qp=fwi%QP(beg_node:end_node,fwi%n_time_step-j)
-             qu=fwi%QU(beg_node:end_node,fwi%n_time_step-j)
+             qp=fwi%QP(beg_node:end_node,j)
+             qu=fwi%QU(beg_node:end_node,j)
           end if
 
           if (fwi%bernstein) then
@@ -538,6 +563,10 @@ contains
              fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
                   -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
 
+             
+!             fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
+
+
              ! fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
              !      -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)          &
              !      *Int_bxb(dtp,qp)*fwi%dx*fwi%dt
@@ -553,6 +582,8 @@ contains
 
              fwi%gradient_vp(i)=fwi%gradient_vp(i)                                &
                   -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
+
+!             fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
 
              ! fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
              !      -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)          &
@@ -584,14 +615,13 @@ contains
        type(t_fwi),intent(inout) :: fwi
 
        integer                         :: i,j
-       integer                         :: nb_section
-       integer,dimension(fwi%nb_elem,2) :: lim_section
-       real,dimension(fwi%nb_elem)      :: grad
-       real,parameter                  :: beta=0.01
+       integer,parameter               :: nb_section=100
+       integer,dimension(nb_section,2) :: lim_section
+       real,dimension(nb_section)      :: grad
+       real,parameter                  :: beta=0.1
        character(len=50)               :: fichier
 
 
-       nb_section=fwi%nb_elem
        grad=0.0
 
        do i=1,nb_section
@@ -607,9 +637,10 @@ contains
        
        if (maxval(abs(grad)).eq.0.0) then
           print*,'Le gradient est nul, fin de l algo'
-          !STOP
+          STOP
        else
           grad=(1.0/maxval(abs(grad)))*grad
+         ! grad=(1.0/grad(17))*grad
        end if
 
        open(unit=19,file='grad.dat')
@@ -641,10 +672,11 @@ contains
      end subroutine update_model
 
 
-  subroutine cost_function(P_received,data_P,final_time)
+  subroutine cost_function(P_received,data_P,final_time,iter)
     real,dimension(:,:),intent(in) :: P_received
     real,dimension(:,:),intent(in) :: data_P
     real               ,intent(in) :: final_time
+    integer            ,intent(in) :: iter
     real                           :: CF
     real :: eval_P_received,eval_data_P
     real :: dt,t
@@ -700,9 +732,10 @@ contains
        
     end do
     CF=CF*dt
+    CF=0.5*CF
 
     print*,'CF=',CF
-    write(33,*) CF
+    write(33,*) iter,CF
 
     
     if (CF.eq.0.0) then

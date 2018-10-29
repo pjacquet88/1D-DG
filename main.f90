@@ -18,7 +18,7 @@ program main!
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
   character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
-  logical         ,parameter :: bernstein=.true.    ! If F-> Lagrange Elements
+  logical         ,parameter :: bernstein=.false.    ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! itlsr max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
   integer         ,parameter :: n_frame=200          ! nb of times where sol. is saved
@@ -26,8 +26,9 @@ program main!
   integer         ,parameter :: receiver_loc=30    ! location of the receiver(elemts)
 
   character(len=*),parameter :: strategy='DTA'
-  character(len=*),parameter :: scalar_product='classical'
-  integer         ,parameter :: nb_iter_fwi=30
+  logical         ,parameter :: adjoint_test=.true.
+  character(len=*),parameter :: scalar_product='M'
+  integer         ,parameter :: nb_iter_fwi=0
   
   real,dimension(3)          :: velocity ! velocity model change the size to change the model 
   real,dimension(1)          :: density  ! density model change the size to change the model
@@ -35,7 +36,7 @@ program main!
   
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.false.
+  logical,parameter          :: animation=.true.
   logical,parameter          :: sortie=.false. ! animation an RTM not working if F
   logical,parameter          :: RTM=.false.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
@@ -77,6 +78,13 @@ program main!
   call create_B2L
   call create_L2B
   call create_derive(ordre)
+  
+  ! do j=1,DoF
+  !    do i=0,nb_elem
+  !       write(100+j,*) real(i)/real(nb_elem),eval_polynom_l(base_l(j,:),real(i)/real(nb_elem))
+  !    end do
+  ! end do
+  ! STOP
   !***************************************************
 
   
@@ -105,13 +113,13 @@ program main!
   t=0
   data_P(0,1)=0.0
   data_P(0,2)=0.0
-  !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+!  call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
   do i=1,forward%n_time_step
      t=i*forward%dt
      call one_forward_step(forward,t)
      data_P(i,1)=t
      data_P(i,2)=forward%P((receiver_loc-1)*DoF+2)
-     !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+ !    call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
   end do
   data_U=0.0
 
@@ -132,9 +140,32 @@ program main!
 
   call init_fwi(fwi,nb_iter_fwi,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
        total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
-       receiver_loc,strategy,scalar_product,animation)
+       receiver_loc,strategy,scalar_product,animation,adjoint_test)
 
-  do i=1,fwi%nb_iter
+  do i=0,fwi%nb_iter
+
+     
+    !      do j=1,33
+    !    fwi%velocity_model(j)=1.0
+    !    fwi%density_model(j)=1.0
+    ! end do
+
+
+    ! do j=34,66
+    !    fwi%velocity_model(j)=1.2
+    !    fwi%density_model(j)=1.2
+    ! end do
+    
+    ! do j=66,nb_elem
+    !    fwi%velocity_model(j)=1.4
+    !    fwi%density_model(j)=1.4
+    ! end do
+    !  if (i.ne.0) then
+    !     fwi%velocity_model(i)=fwi%velocity_model(i)+1.0e-5
+    !  end if
+
+
+     
      fwi%current_iter=i
      print*,'Iteration n°',fwi%current_iter,'/',fwi%nb_iter
      call one_fwi_step(fwi)
@@ -146,17 +177,16 @@ program main!
 
     !--------------------- Animation ----------------------------------------------
   !n_frame=int(forward%n_time_step/forward%n_display)
-    if (animation) then
-     open(unit=78,file='script.gnuplot',action='write')
-     write(78,*)'load "trace1.gnuplot"'
-     write(78,*)'n=',nb_iter_fwi
-     write(78,*)'a=',1
-     write(78,*)'load "trace2.gnuplot"'
-     close(78)
+
+     ! open(unit=78,file='script.gnuplot',action='write')
+     ! write(78,*)'load "trace1.gnuplot"'
+     ! write(78,*)'n=',nb_iter_fwi
+     ! write(78,*)'a=',1
+     ! write(78,*)'load "trace2.gnuplot"'
+     ! close(78)
   
-     call system('gnuplot script.gnuplot')
-     call system ('nw animate.gif &')
-  end if
+     ! call system('gnuplot script.gnuplot')
+!     call system ('nw animate.gif &')
     
   !------------------------ Free Variables --------------------------------------
   call free_basis_b

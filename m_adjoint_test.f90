@@ -70,13 +70,13 @@ module m_adjoint_test
     test%M=M
     test%Minv=Minv
 
-    ! test%tApp=sparse_matmul(test%tApp,test%M)
-    ! test%tAp=sparse_matmul(test%tAp,test%M)
-    ! test%tAv=sparse_matmul(test%tAv,test%M)
+    test%tApp=sparse_matmul(test%tApp,test%M)
+    test%tAp=sparse_matmul(test%tAp,test%M)
+    test%tAv=sparse_matmul(test%tAv,test%M)
 
-    ! test%tApp=sparse_matmul(test%Minv,test%tApp)
-    ! test%tAp=sparse_matmul(test%Minv,test%tAp)
-    ! test%tAv=sparse_matmul(test%Minv,test%tAv)
+    test%tApp=sparse_matmul(test%Minv,test%tApp)
+    test%tAp=sparse_matmul(test%Minv,test%tAp)
+    test%tAv=sparse_matmul(test%Minv,test%tAv)
 
     
     allocate(test%P(0:n_time_step,test%size_v),test%P2(0:n_time_step,test%size_v))
@@ -834,18 +834,18 @@ end subroutine init_adjoint_test
     real                           :: inner_product_M
     integer                        :: i,j
     integer                        :: n_time_step
-    real,dimension(size(P,2))      :: MP,MU
+    real,dimension(size(P,1))      :: MP,MU
 
-    n_time_step=size(U,1)
+    n_time_step=size(P,2)
     inner_product_M=0.0
 
     do i=1,n_time_step
        
-       MP=sparse_matmul(M,P(i,:))
-       MU=sparse_matmul(M,U(i,:))
-    
-       do j=1,size(U,2)
-          inner_product_M=inner_product_M+MP(j)*DP(i,j)+MU(j)*DU(i,j)
+       MP=sparse_matmul(M,P(:,i))
+       MU=sparse_matmul(M,U(:,i))
+
+       do j=1,size(P,1)
+          inner_product_M=inner_product_M+MP(j)*DP(j,i)+MU(j)*DU(j,i)
        end do
     end do
   end function inner_product_M

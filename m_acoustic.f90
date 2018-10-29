@@ -1155,7 +1155,8 @@ contains
        if (problem%signal.eq.'flat') then
           gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
           !gg=sin(4*PI*t)
-          RHSv((problem%source_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha)
+          gg=1.0
+          RHSp((problem%source_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha)
        end if
     end if
 

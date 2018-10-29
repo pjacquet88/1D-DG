@@ -1002,6 +1002,15 @@ contains
        call transpose_sparse(sparse_dummy,problem%App)
        call free_sparse_matrix(sparse_dummy)
 
+       ! call init_sparse_matrix(sparse_dummy,problem%Minv_p%NNN,                 &
+       !      problem%Minv_p%nb_ligne,problem%Minv_p%IA,problem%Minv_p%JA,        &
+       !      problem%Minv_p%Values)
+       ! call free_sparse_matrix(problem%Minv_p)
+       ! call transpose_sparse(problem%Minv_v,problem%Minv_p)
+       ! call free_sparse_matrix(problem%Minv_v)
+       ! call transpose_sparse(sparse_dummy,problem%Minv_v)
+       ! call free_sparse_matrix(sparse_dummy)
+
        if (problem%scalar_product.eq.'M') then
           problem%App=sparse_matmul(problem%App,problem%M)
           problem%Ap=sparse_matmul(problem%Ap,problem%M)
@@ -1148,8 +1157,8 @@ contains
     integer                        :: i
     real                           :: t2
 
-    t2=final_time-t
-   !t2=t
+   ! t2=final_time-t
+   t2=t
     
     i=1
     do while ((P_received(i,1).le.t2).and.(i.ne.size(data_P,1)))
@@ -1187,7 +1196,7 @@ contains
          -data_P(i,1))
 
 
-    eval_backward_source=eval_P_received-eval_data_P
+    eval_backward_source=eval_data_P-eval_P_received
    ! eval_backward_source=eval_data_P
 
     ! write(35,*) t,eval_data_P
@@ -1229,12 +1238,20 @@ contains
           
           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
          !  RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
-        RHSv((problem%receiver_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha) 
+        RHSp((problem%receiver_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha) 
        end if
     end if
 
-    RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    RHSv=sparse_matmul(problem%Minv_v,RHSv)
+    write(16,*) t,gg
+
+    ! RHSp=sparse_matmul(problem%Minv_p,RHSp)
+    ! RHSv=sparse_matmul(problem%Minv_v,RHSv)
+    
+    ! if ((problem%strategy.eq.'DTA').and.(.not.problem%bernstein)) then
+    !    RHSp=-RHSp
+    !    RHSv=-RHSv
+    ! end if
+
   end subroutine eval_RHS
 
 end module m_adjoint
