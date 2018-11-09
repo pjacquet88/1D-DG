@@ -571,7 +571,7 @@ contains
 
        Fp(Dof*nb_elem,Dof*nb_elem)=-0.5+alpha_dummy
        Fp(Dof*nb_elem,1)=0.5-alpha_dummy
-
+       
        alpha_dummy=-alpha
 
        Fv(1,1)=0.5+alpha_dummy
@@ -674,7 +674,7 @@ contains
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
     integer                         :: i
-    real,parameter                  :: alpha=1.00
+    real,parameter                  :: alpha=1.80
     real                            :: cfl
 
     dt=0.0
@@ -700,11 +700,11 @@ contains
     dt=dt*1.0/(maxval(velocity))  !CFL for LF
  !   print*,'dt2',dt
     if (time_scheme.eq.'LF4') then
-       dt=2.7*dt
+       dt=0.1*dt
     else if (time_scheme.eq.'RK4') then
        dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
-       dt=dt/4.7
+       dt=dt/2.8
     end if    
   end subroutine init_dt
   
@@ -823,19 +823,19 @@ contains
        call free_sparse_matrix(problem%Av)
        call transpose_sparse(sparse_dummy,problem%Av)
        call free_sparse_matrix(sparse_dummy)
-       
-    if (problem%scalar_product.eq.'M') then
-       problem%App=sparse_matmul(problem%App,problem%M)
-       problem%Ap=sparse_matmul(problem%Ap,problem%M)
-       problem%Av=sparse_matmul(problem%Av,problem%M)
 
-       problem%App=sparse_matmul(problem%Minv,problem%App)
-       problem%Ap=sparse_matmul(problem%Minv,problem%Ap)
-       problem%Av=sparse_matmul(problem%Minv,problem%Av)
+       if (problem%scalar_product.eq.'M') then
+          problem%App=sparse_matmul(problem%App,problem%M)
+          problem%Ap=sparse_matmul(problem%Ap,problem%M)
+          problem%Av=sparse_matmul(problem%Av,problem%M)
+
+          problem%App=sparse_matmul(problem%Minv,problem%App)
+          problem%Ap=sparse_matmul(problem%Minv,problem%Ap)
+          problem%Av=sparse_matmul(problem%Minv,problem%Av)
+       end if
+
     end if
-    
-    end if
-    
+
   end subroutine init_adjoint_operator
 
 
@@ -902,8 +902,9 @@ contains
                       problem%dx,problem%dt,problem%time_scheme)
        
        Ap_full=matmul(m_glob,s_glob)+Fp
-       Ap_full=matmul(minv_glob_abc,Ap_full)
        Ap_full=matmul(Dp,Ap_full)
+       Ap_full=matmul(minv_glob_abc,Ap_full)
+
 
        if (problem%time_scheme.eq.'LF') then
           App_full=mabs-m_glob
@@ -1238,19 +1239,16 @@ contains
           
           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
          !  RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
-        RHSp((problem%receiver_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha) 
+        RHSp((problem%receiver_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha) 
        end if
     end if
 
     write(16,*) t,gg
-
-    ! RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    ! RHSv=sparse_matmul(problem%Minv_v,RHSv)
     
-    ! if ((problem%strategy.eq.'DTA').and.(.not.problem%bernstein)) then
-    !    RHSp=-RHSp
-    !    RHSv=-RHSv
-    ! end if
+    if (problem%strategy.eq.'ATD') then
+       RHSp=sparse_matmul(problem%Minv_p,RHSp)
+       RHSv=sparse_matmul(problem%Minv_v,RHSv)
+    end if
 
   end subroutine eval_RHS
 

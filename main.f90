@@ -14,10 +14,10 @@ program main!
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
   real            ,parameter :: final_time=3.0      ! final time
-  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
+  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
-  character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
+  character(len=*),parameter :: boundaries='ABC' ! Boundary Conditions
   logical         ,parameter :: bernstein=.false.    ! If F-> Lagrange Elements
   integer         ,parameter :: k_max=1e3            ! itlsr max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
@@ -26,17 +26,17 @@ program main!
   integer         ,parameter :: receiver_loc=30    ! location of the receiver(elemts)
 
   character(len=*),parameter :: strategy='DTA'
-  logical         ,parameter :: adjoint_test=.true.
-  character(len=*),parameter :: scalar_product='M'
+  logical         ,parameter :: adjoint_test=.false.
+  character(len=*),parameter :: scalar_product='canonical'
   integer         ,parameter :: nb_iter_fwi=0
   
-  real,dimension(3)          :: velocity ! velocity model change the size to change the model 
+  real,dimension(nb_elem)    :: velocity ! velocity model change the size to change the model 
   real,dimension(1)          :: density  ! density model change the size to change the model
   !******************************************************************************
   
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.true.
+  logical,parameter          :: animation=.false.
   logical,parameter          :: sortie=.false. ! animation an RTM not working if F
   logical,parameter          :: RTM=.false.    ! if F -> just forward
   logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
@@ -92,9 +92,26 @@ program main!
   ! do i=1,size(velocity)
   !    velocity(i)=i
   ! end do
-  velocity(1)=1.0
-  velocity(2)=1.2
-  velocity(3)=1.2
+  ! velocity(1)=1.0
+  ! velocity(2)=1.2
+  ! velocity(3)=1.5
+
+
+  do i=1,33
+     velocity(i)=1.0
+  end do
+  do i=34,66
+     velocity(i)=1.2
+  end do
+  
+  do i=67,100
+     velocity(i)=1.5
+  end do
+
+  ! do i=76,100
+  !    velocity(i)=1.0
+  ! end do
+    
   do i=1,size(density)
      density(i)=1
   end do
@@ -110,16 +127,19 @@ program main!
 
   allocate(data_P(0:forward%n_time_step,2))
   allocate(data_U(0:forward%n_time_step,2))
+  !print*,'Il y a ',forward%n_time_step,'time steps'
   t=0
   data_P(0,1)=0.0
   data_P(0,2)=0.0
-!  call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+  !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
   do i=1,forward%n_time_step
      t=i*forward%dt
      call one_forward_step(forward,t)
      data_P(i,1)=t
-     data_P(i,2)=forward%P((receiver_loc-1)*DoF+2)
- !    call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+     data_P(i,2)=forward%P((receiver_loc-1)*DoF+1)
+     !if (modulo(i,100).eq.0) then
+        !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+     !end if
   end do
   data_U=0.0
 
@@ -143,26 +163,26 @@ program main!
        receiver_loc,strategy,scalar_product,animation,adjoint_test)
 
   do i=0,fwi%nb_iter
-
      
-    !      do j=1,33
-    !    fwi%velocity_model(j)=1.0
-    !    fwi%density_model(j)=1.0
-    ! end do
+     do j=1,33
+        fwi%velocity_model(j)=1.0
+     end do
+     do j=34,66
+        fwi%velocity_model(j)=1.1
+     end do
 
+     do j=67,100
+        fwi%velocity_model(j)=1.4
+     end do
 
-    ! do j=34,66
-    !    fwi%velocity_model(j)=1.2
-    !    fwi%density_model(j)=1.2
-    ! end do
+     ! do j=76,100
+     !    fwi%velocity_model(j)=1.0
+     ! end do
     
-    ! do j=66,nb_elem
-    !    fwi%velocity_model(j)=1.4
-    !    fwi%density_model(j)=1.4
-    ! end do
-    !  if (i.ne.0) then
-    !     fwi%velocity_model(i)=fwi%velocity_model(i)+1.0e-5
-    !  end if
+     
+     if (i.ne.0) then
+        fwi%velocity_model(i)=fwi%velocity_model(i)+1.0e-5
+     end if
 
 
      

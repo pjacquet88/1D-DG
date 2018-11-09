@@ -35,6 +35,10 @@ module m_fwi
      real,dimension(:,:),allocatable :: GU
      real,dimension(:)  ,allocatable :: gradient_rho
      real,dimension(:)  ,allocatable :: gradient_vp
+     real,dimension(:,:),allocatable :: M
+     real,dimension(:,:),allocatable :: Ap
+     real,dimension(:,:),allocatable :: App
+     real,dimension(:,:),allocatable :: Av
      
      integer                         :: nb_elem
      integer                         :: DoF
@@ -174,6 +178,7 @@ contains
     type(t_fwi),intent(inout) :: fwi
     integer                   :: current_time_step
     real                      :: t
+    real                      :: t1,t2
 
     real,dimension(fwi%DoF*fwi%nb_elem) :: RTM
     integer                             :: i,j
@@ -192,6 +197,10 @@ contains
     print*,'Il y a ',fwi%n_time_step,'time steps'
     fwi%dt=fwi%forward%dt
     fwi%dx=fwi%forward%dx
+    call Sparse2Full(fwi%forward%M,fwi%M)
+    call Sparse2Full(fwi%forward%Ap,fwi%Ap)
+    call Sparse2Full(fwi%forward%App,fwi%App)
+    call Sparse2Full(fwi%forward%Av,fwi%Av)
     
     allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
@@ -225,9 +234,9 @@ contains
        fwi%P(:,current_time_step)=fwi%forward%P
        fwi%U(:,current_time_step)=fwi%forward%U
        fwi%P_received(current_time_step,1)=t
-       fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+2)
+       fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+1)
        fwi%U_received(current_time_step,1)=t
-       fwi%U_received(current_time_step,2)=fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+2)
+       fwi%U_received(current_time_step,2)=fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+1)
        
        if (fwi%adjoint_test) then
           fwi%FP(:,current_time_step)=fwi%forward%RHSp
@@ -268,7 +277,7 @@ contains
     call free_acoustic_problem(fwi%forward)
     
     ! print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    ! print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+    ! print*,'%%%%%%%%%%%%%%%%%%%%% backward %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     ! print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     call init_adjoint_problem(fwi%backward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
@@ -370,26 +379,14 @@ contains
     call free_adjoint_problem(fwi%backward)
     
     ! print*,'test gradient'
-    call gradient_computation(fwi)
-    ! if (fwi%strategy.eq.'DTA') then
-    !    open(unit=23,file='grad_vp_DTA.dat')
-    !    open(unit=24,file='grad_rho_DTA.dat')
-    !    do i=1,size(fwi%gradient_vp)
-    !       write(23,*) fwi%gradient_vp(i)
-    !       write(24,*) fwi%gradient_rho(i)
-    !    end do
-    !    close(23)
-    !    close(24)
-    !    else
-    !    open(unit=23,file='grad_vp_ATD.dat')
-    !    open(unit=24,file='grad_rho_ATD.dat')
-    !    do i=1,size(fwi%gradient_vp)
-    !       write(23,*) fwi%gradient_vp(i)
-    !       write(24,*) fwi%gradient_rho(i)
-    !    end do
-    !    close(23)
-    !    close(24)
-    ! end if
+    call CPU_TIME(t1)    
+    if (fwi%strategy.eq.'ATD') then
+       call gradient_ATD_computation(fwi)
+    else if (fwi%strategy.eq.'DTA') then
+       call gradient_DTA_computation(fwi)
+    end if
+    call CPU_TIME(t2)
+    print*,'Temps de calcul du gradient est de : ',t2-t1
 
     call update_model(fwi)
 
@@ -402,31 +399,43 @@ contains
     deallocate(fwi%QU)
     deallocate(fwi%P_received)
     deallocate(fwi%U_received)
+    deallocate(fwi%M)
+    deallocate(fwi%Ap)
+    deallocate(fwi%App)
+    deallocate(fwi%Av)
+    if (fwi%adjoint_test) then
+       deallocate(fwi%FP)
+       deallocate(fwi%FU)
+       deallocate(fwi%FP_half)
+       deallocate(fwi%FU_half)
+       deallocate(fwi%GP)
+       deallocate(fwi%GU)
+    end if
 
     
-     print*,'%%%%%%%%%%%%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%'
-     call  init_adjoint_test(test,fwi%n_time_step,fwi%time_scheme,fwi%backward%dt,&
-          test%Ap,test%Av,test%App,test%M,test%Minv,&
-          fwi%nb_elem,fwi%DoF,fwi%backward%dx,fwi%FP,fwi%FU,fwi%FP_half,fwi%FU_half,fwi%DP,fwi%DU)
-     call forward_test(test)
-     call extract_g(test)
-     call backward_test(test)
-     print*,'Inner Product PU/DPDU',inner_product(test%P,test%U,test%DP,test%DU)
-     print*,'Inner Product QPQU/GPGU',inner_product(test%QP,test%QU,test%GP,test%GU)
-     print*,'M Inner Product PU/DPDU',inner_product_M(test%P,test%U,test%DP,test%DU,test%M)
-     print*,'M Inner Product QPQU/GPGU',inner_product_M(test%QP,test%QU,test%GP,test%GU,test%M)
-     print*,'norm test P',(norm_test(fwi%P)-norm_test(test%P))/norm_test(test%P)
-     print*,'norm test U',(norm_test(fwi%U)-norm_test(test%U))/norm_test(test%U)
-     print*,'norm test QP',(norm_test(fwi%QP)-norm_test(test%QP))/norm_test(test%QP)
-     print*,'norm test QU',(norm_test(fwi%QU)-norm_test(test%QU))/norm_test(test%QU)
-     print*,'norm test FP',norm_test(fwi%FP)-norm_test(test%FP)
-     print*,'norm test FU',norm_test(fwi%FU)-norm_test(test%FU)
-     print*,'norm test FP_half',norm_test(fwi%FP_half)-norm_test(test%FP_half)
-     print*,'norm test FU_half',norm_test(fwi%FU_half)-norm_test(test%FU_half)
-     print*,'norm test DP',norm_test(fwi%DP)-norm_test(test%DP)     
-     print*,'norm test DU',norm_test(fwi%DU)-norm_test(test%DU)   
+     ! print*,'%%%%%%%%%%%%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%'
+     ! call  init_adjoint_test(test,fwi%n_time_step,fwi%time_scheme,fwi%backward%dt,&
+     !      test%Ap,test%Av,test%App,test%M,test%Minv,&
+     !      fwi%nb_elem,fwi%DoF,fwi%backward%dx,fwi%FP,fwi%FU,fwi%FP_half,fwi%FU_half,fwi%DP,fwi%DU)
+     ! call forward_test(test)
+     ! call extract_g(test)
+     ! call backward_test(test)
+     ! print*,'Inner Product PU/DPDU',inner_product(test%P,test%U,test%DP,test%DU)
+     ! print*,'Inner Product QPQU/GPGU',inner_product(test%QP,test%QU,test%GP,test%GU)
+     ! print*,'M Inner Product PU/DPDU',inner_product_M(test%P,test%U,test%DP,test%DU,test%M)
+     ! print*,'M Inner Product QPQU/GPGU',inner_product_M(test%QP,test%QU,test%GP,test%GU,test%M)
+     ! print*,'norm test P',(norm_test(fwi%P)-norm_test(test%P))/norm_test(test%P)
+     ! print*,'norm test U',(norm_test(fwi%U)-norm_test(test%U))/norm_test(test%U)
+     ! print*,'norm test QP',(norm_test(fwi%QP)-norm_test(test%QP))/norm_test(test%QP)
+     ! print*,'norm test QU',(norm_test(fwi%QU)-norm_test(test%QU))/norm_test(test%QU)
+     ! print*,'norm test FP',norm_test(fwi%FP)-norm_test(test%FP)
+     ! print*,'norm test FU',norm_test(fwi%FU)-norm_test(test%FU)
+     ! print*,'norm test FP_half',norm_test(fwi%FP_half)-norm_test(test%FP_half)
+     ! print*,'norm test FU_half',norm_test(fwi%FU_half)-norm_test(test%FU_half)
+     ! print*,'norm test DP',norm_test(fwi%DP)-norm_test(test%DP)     
+     ! print*,'norm test DU',norm_test(fwi%DU)-norm_test(test%DU)   
      
-     print*,'%%%%%%%%%%%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%'
+     ! print*,'%%%%%%%%%%%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%'
 
     !--------------------- Animation ----------------------------------------------
   !n_frame=int(forward%n_time_step/forward%n_display)
@@ -505,22 +514,27 @@ contains
 
 
 
-  subroutine gradient_computation(fwi)
+  subroutine gradient_ATD_computation(fwi)
     type(t_fwi),intent(inout) :: fwi
     real,dimension(fwi%DoF)       :: dtu,dtp,qu,qp
+    real,dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
+    real,dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
+    real,dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
 
     integer :: nb_elem,DoF,beg_node,end_node
     integer :: i,j,k
-    real    :: one_parameter,moyenne
+    real    :: moyenne
 
+
+    
     nb_elem=fwi%nb_elem   ! For sake of
     DoF=fwi%DoF           ! readibility
     
 
     fwi%gradient_vp=0.0
     fwi%gradient_rho=0.0
-
-
+    
+    
     do j=0,fwi%n_time_step
        do i=1,nb_elem
           if (j.eq.0) then
@@ -547,12 +561,97 @@ contains
              qu=fwi%QU(beg_node:end_node,j)
           end if
 
+
           if (fwi%bernstein) then
 
              dtp=matmul(B2L,dtp)
              dtu=matmul(B2L,dtu)
              qp=matmul(B2L,qp)
              qu=matmul(B2L,qu)
+
+          end if
+
+          moyenne=0.0
+          do k=1,DoF
+             moyenne=dtp(k)*qp(k)
+          end do
+          moyenne=moyenne/DoF
+
+          fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
+               -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
+
+       end do
+    end do
+
+       fwi%gradient_vp=fwi%gradient_vp*fwi%dx*fwi%dt        
+
+     end subroutine gradient_ATD_computation
+
+     subroutine gradient_DTA_computation(fwi)
+       type(t_fwi),intent(inout) :: fwi
+       real,dimension(fwi%DoF)       :: dtu,dtp,qu,qp
+       real,dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
+       real,dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
+       real,dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
+
+       integer :: nb_elem,DoF,beg_node,end_node
+       integer :: i,j,k
+       real    :: one_parameter,moyenne
+       real,dimension(fwi%DoF,fwi%DoF) :: M_loc
+       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Ap_loc
+       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: App_loc
+       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Av_loc
+
+       type(sparse_matrix)                         :: Ap_sparse_loc
+       type(sparse_matrix)                         :: App_sparse_loc
+       type(sparse_matrix)                         :: Av_sparse_loc
+
+
+       nb_elem=fwi%nb_elem   ! For sake of
+       DoF=fwi%DoF           ! readibility
+    
+       
+       fwi%gradient_vp=0.0
+       fwi%gradient_rho=0.0
+
+
+       if (fwi%time_scheme.eq.'RK4') then
+          do j=0,fwi%n_time_step
+             do i=1,nb_elem
+                M_loc=fwi%M((i-1)*DoF+1:i*DoF,(i-1)*DoF+1:i*DoF)
+
+             if (j.eq.0) then
+                beg_node=(i-1)*DoF+1
+                end_node=i*DoF
+                dtu=(fwi%U(beg_node:end_node,j+1)-fwi%U(beg_node:end_node,j))/(fwi%dt)
+                dtp=(fwi%P(beg_node:end_node,j+1)-fwi%P(beg_node:end_node,j))/(fwi%dt)
+                qp=fwi%QP(beg_node:end_node,j)
+                qu=fwi%QU(beg_node:end_node,j)
+
+             else if (j.eq.fwi%n_time_step) then
+                beg_node=(i-1)*DoF+1
+                end_node=i*DoF
+                dtu=(fwi%U(beg_node:end_node,j)-fwi%U(beg_node:end_node,j-1))/(fwi%dt)
+                dtp=(fwi%P(beg_node:end_node,j)-fwi%P(beg_node:end_node,j-1))/(fwi%dt)
+                qp=fwi%QP(beg_node:end_node,j)
+                qu=fwi%QU(beg_node:end_node,j)
+             else
+                beg_node=(i-1)*DoF+1
+                end_node=i*DoF
+                dtu=(fwi%U(beg_node:end_node,j+1)-fwi%U(beg_node:end_node,j-1))/(2*fwi%dt)
+                dtp=(fwi%P(beg_node:end_node,j+1)-fwi%P(beg_node:end_node,j-1))/(2*fwi%dt)
+                qp=fwi%QP(beg_node:end_node,j)
+                qu=fwi%QU(beg_node:end_node,j)
+             end if
+
+             if (fwi%strategy.eq.'DTA') then
+                dtp=matmul(M_loc,dtp)
+                dtu=matmul(M_loc,dtu)
+                if (fwi%scalar_product.eq.'M') then
+                   dtp=matmul(M_loc,dtp)
+                   dtu=matmul(M_loc,dtu)
+                end if
+             end if
 
              moyenne=0.0
              do k=1,DoF
@@ -562,53 +661,77 @@ contains
 
              fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
                   -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
-
-             
-!             fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
-
-
-             ! fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
-             !      -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)          &
-             !      *Int_bxb(dtp,qp)*fwi%dx*fwi%dt
-             
-             ! fwi%gradient_vp(i)=fwi%gradient_vp(i)+Int_bxb(dtp,qp)*fwi%dx*fwi%dt
-             ! fwi%gradient_rho(i)=fwi%gradient_rho(i)+Int_bxb(dtu,qu)*fwi%dx*fwi%dt 
-          else
-             moyenne=0.0
-             do k=1,DoF
-                moyenne=dtp(k)*qp(k)
-             end do
-             moyenne=moyenne/DoF
-
-             fwi%gradient_vp(i)=fwi%gradient_vp(i)                                &
-                  -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
-
-!             fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
-
-             ! fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
-             !      -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)          &
-             !      *Int_lxl(dtp,qp)*fwi%dx*fwi%dt
-
-             ! fwi%gradient_vp(i)=fwi%gradient_vp(i)+Int_lxl(dtp,qp)*fwi%dx*fwi%dt
-             ! fwi%gradient_rho(i)=fwi%gradient_rho(i)+Int_lxl(dtu,qu)*fwi%dx*fwi%dt 
-             end if
           end do
        end do
 
-       fwi%gradient_vp=fwi%gradient_vp*fwi%dx*fwi%dt 
+    else
+
+       fwi%gradient_vp=fwi%gradient_vp*fwi%dx*fwi%dt        
+
+       if ((fwi%strategy.eq.'DTA').and.(fwi%time_scheme.eq.'AB3')) then
+
+       print*,'je suis passe par là'
+
+          fwi%gradient_vp=0.0
+
+          fwi%App(1,1)=fwi%App(1,1)/fwi%velocity_model(1)
+          fwi%App(fwi%DoF*fwi%nb_elem,fwi%DoF*fwi%nb_elem)=                     &
+               fwi%App(fwi%DoF*fwi%nb_elem,fwi%DoF*fwi%nb_elem)/                &
+               fwi%velocity_model(fwi%DoF)
+          
+
+             do i=1,nb_elem
+                Ap_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)/(0.5*fwi%velocity_model(i))
+                App_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)
+                Av_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)
+                
+                beg_node=(i-1)*DoF+1
+                end_node=i*DoF
+
+                call Full2Sparse(Ap_loc,Ap_sparse_loc)
+                call Full2Sparse(App_loc,App_sparse_loc)
+                call Full2Sparse(Av_loc,Av_sparse_loc)
+
+                do j=0,fwi%n_time_step
+                qp=fwi%QP(beg_node:end_node,j)
+
+
+                u0=(fwi%U(:,j))
+                p0=(fwi%P(:,j))
+                if (j.eq.0) then
+                   u1=0.0
+                   u2=0.0
+                   p1=0.0
+                   p2=0.0
+                else if (j.eq.1) then
+                   u1=(fwi%U(:,j-1))
+                   p1=(fwi%P(:,j-1))
+                   u2=0.0
+                   p2=0.0
+                else
+                   u1=(fwi%U(:,j-1))
+                   p1=(fwi%P(:,j-1))
+                   u2=(fwi%U(:,j-2))
+                   p2=(fwi%P(:,j-2))
+
+                   dtp=-23.0/12.0*(sparse_matmul(App_sparse_loc,p0)+sparse_matmul(Ap_sparse_loc,u0))  &
+                        +16.0/12.0*(sparse_matmul(App_sparse_loc,p1)+sparse_matmul(Ap_sparse_loc,u1)) &
+                        -5.0/12.0*(sparse_matmul(App_sparse_loc,p2)+sparse_matmul(Ap_sparse_loc,u2))
+
+                   moyenne=0.0
+                   do k=1,fwi%DoF
+                      moyenne=dtp(k)*qp(k)
+                   end do
+
+                   fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
+                end if
+             end do
+          end do
+       end if
+    end if
+
        
-       one_parameter=sum(fwi%gradient_vp)
-       ! print*,'grad_vp=',one_parameter
-       ! print*,'premier tier',sum(fwi%gradient_vp(1:int(size(fwi%gradient_vp)/3)))
-       ! print*,'deuxieme tier',sum(fwi%gradient_vp(int(size(fwi%gradient_vp)/3)+1:int(2*size(fwi%gradient_vp)/3)))
-       ! print*,'troisieme tier',sum(fwi%gradient_vp(2*int(size(fwi%gradient_vp)/3)+1:size(fwi%gradient_vp)))
-       
-       
-       ! do i=1,size(fwi%gradient_vp)
-       !    fwi%gradient_vp(i)=one_parameter
-       ! end do
-       
-     end subroutine gradient_computation
+     end subroutine gradient_DTA_computation
 
 
      subroutine update_model(fwi)
@@ -618,7 +741,7 @@ contains
        integer,parameter               :: nb_section=100
        integer,dimension(nb_section,2) :: lim_section
        real,dimension(nb_section)      :: grad
-       real,parameter                  :: beta=0.1
+       real,parameter                  :: beta=0.05
        character(len=50)               :: fichier
 
 
@@ -630,8 +753,8 @@ contains
        end do
        lim_section(nb_section,2)=fwi%nb_elem
 
-       grad(1:33)=0.0
-       do i=34,nb_section
+       !grad(1:33)=0.0
+       do i=1,nb_section
           grad(i)=sum(fwi%gradient_vp(lim_section(i,1):lim_section(i,2)))
        end do
        
@@ -639,8 +762,8 @@ contains
           print*,'Le gradient est nul, fin de l algo'
           STOP
        else
-          grad=(1.0/maxval(abs(grad)))*grad
-         ! grad=(1.0/grad(17))*grad
+          !grad=(1.0/maxval(abs(grad)))*grad
+          grad=(1.0/grad(50))*grad
        end if
 
        open(unit=19,file='grad.dat')

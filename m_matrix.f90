@@ -186,7 +186,7 @@ contains
   function sparse_MV(A,X)
     type(sparse_matrix),intent(in) :: A
     real,dimension(:)  ,intent(in) :: X
-    real,dimension(size(X))        :: sparse_MV
+    real,dimension(A%nb_ligne)     :: sparse_MV
     integer                        :: i,j
 
     sparse_MV=0.0

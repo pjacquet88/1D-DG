@@ -58,17 +58,17 @@ module m_time_scheme
     real,dimension(size(P)) :: Uk1,Uk2,Uk3,Uk4
     real,dimension(size(P)) :: Pk1,Pk2,Pk3,Pk4
 
-    Uk1=-sparse_matmul(Av,P)-FU_0
-    Pk1=-sparse_matmul(App,P)-sparse_matmul(Ap,U)-FP_0
+    Uk1=-sparse_matmul(Av,P)+FU_0
+    Pk1=-sparse_matmul(App,P)-sparse_matmul(Ap,U)+FP_0
     
-    Uk2=-sparse_matmul(Av,P+0.5*Pk1)-FU_half
-    Pk2=-sparse_matmul(App,P+0.5*Pk1)-sparse_matmul(Ap,U+0.5*Uk1)-FP_half
+    Uk2=-sparse_matmul(Av,P+0.5*Pk1)+FU_half
+    Pk2=-sparse_matmul(App,P+0.5*Pk1)-sparse_matmul(Ap,U+0.5*Uk1)+FP_half
 
-    Uk3=-sparse_matmul(Av,P+0.5*Pk2)-FU_half
-    Pk3=-sparse_matmul(App,P+0.5*Pk2)-sparse_matmul(Ap,U+0.5*Uk2)-FP_half
+    Uk3=-sparse_matmul(Av,P+0.5*Pk2)+FU_half
+    Pk3=-sparse_matmul(App,P+0.5*Pk2)-sparse_matmul(Ap,U+0.5*Uk2)+FP_half
 
-    Uk4=-sparse_matmul(Av,P+Pk3)-FU_1
-    Pk4=-sparse_matmul(App,P+Pk3)-sparse_matmul(Ap,U+Uk3)-FP_1
+    Uk4=-sparse_matmul(Av,P+Pk3)+FU_1
+    Pk4=-sparse_matmul(App,P+Pk3)-sparse_matmul(Ap,U+Uk3)+FP_1
     
     if ((present(GP)).and.(present(GU))) then
        P=P+(1.0/6.0)*(Pk1+2.0*Pk2+2.0*Pk3+Pk4)+GP
@@ -143,8 +143,8 @@ module m_time_scheme
        Uk0=-sparse_matmul(Av,P)
        Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)
     else
-       Uk0=-sparse_matmul(Av,P)-FU0
-       Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)-FP0
+       Uk0=-sparse_matmul(Av,P)+FU0
+       Pk0=-sparse_matmul(App,P)-sparse_matmul(Ap,U)+FP0
     end if
 
     P=P+23.0/12.0*Pk0         &

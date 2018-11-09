@@ -644,7 +644,7 @@ contains
     real,dimension(size(Ap,1),size(Ap,2)) :: A
     real                            :: max_value
     integer                         :: i
-    real,parameter                  :: alpha=1.00
+    real,parameter                  :: alpha=1.80
     real                            :: cfl
 
     dt=0.0
@@ -668,11 +668,11 @@ contains
     !print*,'dt2',dt
 
     if (time_scheme.eq.'LF4') then
-       dt=2.7*dt
+       dt=0.1*dt
     else if (time_scheme.eq.'RK4') then
        dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
-       dt=dt/4.7
+       dt=dt/2.8
     end if
 
   end subroutine init_dt
@@ -846,8 +846,9 @@ contains
                       problem%dx,problem%dt,problem%time_scheme)
        
        Ap_full=matmul(m_glob,s_glob)+Fp
-       Ap_full=matmul(minv_glob_abc,Ap_full)
        Ap_full=matmul(Dp,Ap_full)
+       Ap_full=matmul(minv_glob_abc,Ap_full)
+
 
        if (problem%time_scheme.eq.'LF') then
           App_full=mabs-m_glob
@@ -1155,8 +1156,8 @@ contains
        if (problem%signal.eq.'flat') then
           gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
           !gg=sin(4*PI*t)
-          gg=1.0
-          RHSp((problem%source_loc-1)*problem%DoF+2)=gg*(1.0-0.0*problem%alpha)
+          !gg=1.0
+          RHSp((problem%source_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha)
        end if
     end if
 
