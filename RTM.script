@@ -1,5 +1,0 @@
-set terminal png
-set output 'RTM.png'
-plot 'RTM.dat'
-set output 'RTM_Lap.png'
-plot 'RTM_Lap.dat'
