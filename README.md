@@ -1,3 +1,9 @@
+README NOT UPDATED
+
+I STILL HAVE SOME CORRECTION TO DO
+
+
+
 # Bernstein
 
 To compile : "make"
