@@ -5,7 +5,9 @@ module m_acoustic
   use m_file_function
   use m_time_scheme
   implicit none
-  
+
+
+  ! Acoustic problem type
   type acoustic_problem
      integer                         :: DoF          ! nb of degree of freedom 
      integer                         :: nb_elem      ! nb of elements
@@ -26,13 +28,13 @@ module m_acoustic
      character(len=20)               :: signal       ! string to initialize U,P
      integer                         :: k_max        ! iter max for power method
      real                            :: epsilon      ! precision for power method algo.
-     real,dimension(:),allocatable   :: RHSv        
+     real,dimension(:),allocatable   :: RHSu         
      real,dimension(:),allocatable   :: RHSp        
-     real,dimension(:),allocatable   :: RHSv_half        
+     real,dimension(:),allocatable   :: RHSu_half        
      real,dimension(:),allocatable   :: RHSp_half        
      
      !----------- MATRICES ---------------------------
-     type(sparse_matrix)             :: Ap,App       
+     type(sparse_matrix)             :: Ap,App
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
      type(sparse_matrix)             :: M,Minv
@@ -48,9 +50,9 @@ module m_acoustic
   public  :: init_acoustic_problem,init_acoustic_operator,all_forward_step,     &
              one_forward_step,                                                  &
              free_acoustic_problem,                                             &
-             error_periodique
+             error_periodic
 
-  private :: xx,weight,solution,PI,                                             &
+  private :: xx,weight,initial_perturbation,PI,                                             &
              init_quadrature,Int_bxb,Int_lxl,init_m_loc,init_s_loc,             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
              init_s_glob,init_FpFv,init_DpDv,init_dt
@@ -59,6 +61,7 @@ contains
 
 
   !****************** QUADRATURE ***********************************************
+  ! Initializes the quadrature to evaluate polynomial integrals
   subroutine init_quadrature
     integer :: i
     xx(1)=6.0037409897572858D-3
@@ -85,7 +88,7 @@ contains
     end do
   end subroutine init_quadrature
 
-
+  ! Evaluates the integral of the product of 2 bernstein polyniomials
   function Int_bxb(bpol1,bpol2)
     real,dimension(:),intent(in) :: bpol1
     real,dimension(:),intent(in) :: bpol2
@@ -103,7 +106,7 @@ contains
     
   end function Int_bxb
 
-  
+  ! Evaluates the integral of the product of 2 lagrange polynomials  
   function Int_lxl(lpol1,lpol2)
     real,dimension(:),intent(in) :: lpol1
     real,dimension(:),intent(in) :: lpol2
@@ -122,39 +125,40 @@ contains
 
 
   !******************* INIT PROBLEM **************************************
-  
-  function solution(x,dt,signal)
+  ! Contains the initial perturbation
+  function initial_perturbation(x,dt,signal)
     real,intent(in) :: x
     real,intent(in) :: dt
     character(len=*),intent(in) :: signal
-    real                        :: solution
-
+    real                        :: initial_perturbation 
     real                        :: xt
 
     xt=x+dt
     
     if (signal.eq.'sinus') then
-       solution=sin(4*PI*xt)
-       ! solution=sin(xt)
+       initial_perturbation=sin(4*PI*xt)
+       ! initial_perturbation=sin(xt)
     else if (signal.eq.'boxcar') then
        if ((x.lt.0.55).and.(x.gt.0.45)) then
-          solution=0.5
+          initial_perturbation=0.5
        else
-          solution=0.0
+          initial_perturbation=0.0
        end if
     else if (signal.eq.'x') then
-       solution=xt**5
+       initial_perturbation=xt**5
         else if (signal.eq.'flat') then
-       solution=0.0
+       initial_perturbation=0.0
     else
-       solution=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
+       initial_perturbation=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
     end if    
-  end function solution
+  end function initial_perturbation
 
 
-  subroutine init_acoustic_problem(problem,nb_elem,DoF,time_scheme,velocity,density,     &
-                          total_length,final_time,alpha,bernstein,signal,                &
-                          boundaries,k_max,epsilon,source_loc,receiver_loc)
+  ! Initializes the acoustic problem
+  subroutine init_acoustic_problem(problem,nb_elem,DoF,time_scheme,velocity,    &
+                                   density,total_length,final_time,alpha,       &
+                                   bernstein,signal, boundaries,k_max,epsilon,  &
+                                   source_loc,receiver_loc)
     
     type(acoustic_problem),intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
@@ -272,16 +276,15 @@ contains
     ! end if
     ! print*,'------------------------------------------------------------'
 
-    allocate(problem%RHSv(nb_elem*DoF))
+    allocate(problem%RHSu(nb_elem*DoF))
     allocate(problem%RHSp(nb_elem*DoF))
     if (time_scheme.eq.'RK4') then
-       allocate(problem%RHSv_half(nb_elem*DoF))
+       allocate(problem%RHSu_half(nb_elem*DoF))
        allocate(problem%RHSp_half(nb_elem*DoF))
-    end if
-   
+    end if   
   end subroutine init_acoustic_problem
 
-  
+  ! Initialize P and U at time=0  
   subroutine init_UP(problem)
     type(acoustic_problem),intent(inout) :: problem
     integer                              :: i,j,DoF
@@ -300,8 +303,8 @@ contains
     do i=1,problem%nb_elem
        do j=1,DoF
           x=(i-1)*problem%dx+(j-1)*ddx
-          problem%U((i-1)*problem%DoF+j)=solution(x,0.0,problem%signal)
-          problem%P((i-1)*problem%DoF+j)=solution(x,dephasing,problem%signal)
+          problem%U((i-1)*problem%DoF+j)=initial_perturbation(x,0.0,problem%signal)
+          problem%P((i-1)*problem%DoF+j)=initial_perturbation(x,dephasing,problem%signal)
        end do
     end do
 
@@ -315,7 +318,7 @@ contains
   
 
  !--------------------- Init Matrices ------------------------------------
-
+  ! Initializes the local masse matrix (on one element)
   subroutine init_m_loc(m_loc,DoF,bernstein)
     real,dimension(:,:),intent(out) :: m_loc
     integer            ,intent(in)  :: DoF
@@ -345,7 +348,7 @@ contains
     
   end subroutine init_m_loc
 
-  
+  ! Initializes the local inverse mass matrix (on one element)
   subroutine init_minv_loc(minv_loc,m_loc)
     real,dimension(:,:),intent(out) :: minv_loc
     real,dimension(:,:),intent(in)  :: m_loc
@@ -353,7 +356,8 @@ contains
     minv_loc=LU_inv(m_loc)
   end subroutine init_minv_loc
 
-  
+
+  ! Initialize the global mass matrix (on all the elements)
   subroutine init_m_glob(m_glob,m_loc,nb_elem)
     real,dimension(:,:),intent(out) :: m_glob
     real,dimension(:,:),intent(in)  :: m_loc
@@ -368,7 +372,8 @@ contains
     end do
   end subroutine init_m_glob
   
-  
+
+  ! Initialize the global inverse mass matrix (on all the element)
   subroutine init_minv_glob(minv_glob,minv_loc,nb_elem)
     real,dimension(:,:),intent(out) :: minv_glob       
     real,dimension(:,:),intent(in)  :: minv_loc
@@ -384,6 +389,8 @@ contains
     end do
   end subroutine init_minv_glob
 
+
+  ! initialize the global inverse "abc mass matrix" 
   subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity_beg,   &
                                 velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: minv_glob_abc
@@ -424,6 +431,7 @@ contains
   end subroutine init_minv_glob_abc
 
 
+  ! Initializes the global Abs matrix
   subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: mabs
     integer            ,intent(in)  :: nb_elem
@@ -447,7 +455,8 @@ contains
     end if
   end subroutine init_mabs
 
-    
+
+  ! Initailizes the local stiffness matrix (on one element)
   subroutine init_s_loc(s_loc,DoF,bernstein)
     real,dimension(:,:),intent(out) :: s_loc
     integer            ,intent(in)  :: DoF
@@ -472,7 +481,8 @@ contains
     end if         
   end subroutine init_s_loc
 
-  
+
+  ! Initialize the global stiffness matrix (on all the elements)
   subroutine init_s_glob(s_glob,s_loc,nb_elem)
     real,dimension(:,:),intent(out) :: s_glob
     real,dimension(:,:),intent(in)  :: s_loc
@@ -488,6 +498,8 @@ contains
     end do
   end subroutine init_s_glob
 
+
+  ! Initalize the Fp and Fv flux matrices (with penalization)
   subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha,receiver_loc)
     real,dimension(:,:),intent(out) :: Fp
     real,dimension(:,:),intent(out) :: Fv
@@ -533,7 +545,7 @@ contains
     Fv(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha_dummy
     Fv(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha_dummy
 
-    if (boundaries.eq.'periodique') then
+    if (boundaries.eq.'periodic') then
        alpha_dummy=alpha
 
        Fp(1,1)=0.5+alpha_dummy
@@ -609,7 +621,7 @@ contains
     end if
   end subroutine init_FpFv
 
-
+  ! Initializes the diagonal parameter matrices
   subroutine init_DpDv(Dp,Dv,DoF,nb_elem,velocity,density)
     real,dimension(:,:),intent(out) :: Dp
     real,dimension(:,:),intent(out) :: Dv
@@ -631,6 +643,7 @@ contains
   end subroutine init_DpDv
 
 
+  ! Initializes the time step length dt
   subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme,velocity)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
@@ -650,14 +663,10 @@ contains
     dt=0.0
     
     A=matmul(Ap,Av)
-    ! print*,'Ap',minval(Ap),maxval(Ap)
-    ! print*,'Av',minval(Av),maxval(Av)
-    ! print*,'A',minval(A),maxval(A)
     
     call Full2Sparse(A,sparse_A)
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=alpha/(sqrt(abs(max_value)))
-   ! print*,'dt1',dt
     call free_sparse_matrix(sparse_A)
     A=matmul(Av,Ap)
     call Full2Sparse(matmul(Av,Ap),sparse_A)
@@ -665,19 +674,17 @@ contains
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
     dt=dt*1.0/(maxval(velocity))  !CFL for LF
-    !print*,'dt2',dt
 
     if (time_scheme.eq.'LF4') then
-       dt=0.1*dt
+       dt=1.0*dt
     else if (time_scheme.eq.'RK4') then
        dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
        dt=dt/2.8
     end if
-
   end subroutine init_dt
   
-
+  ! Initializes the main operators (if there is no ABC)
   subroutine init_acoustic_operator(problem)
     type(acoustic_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
@@ -768,12 +775,7 @@ contains
        problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
-    
-    ! print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
-    ! print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
-    !      problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    ! print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
-    !                                                        problem%Ap%nb_ligne**2
+
     App_full=0.0
     if (problem%time_scheme.eq.'LF') then
        do i=1,size(App_full,1)
@@ -784,7 +786,7 @@ contains
   end subroutine init_acoustic_operator
 
 
-  
+  ! Initializes the main operators with ABC
    subroutine init_acoustic_operator_abc(problem)
     type(acoustic_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
@@ -811,18 +813,7 @@ contains
     call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
                    problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
-
-    ! print*,'m_loc',minval(m_loc),maxval(m_loc)
-    ! print*,'m_glob',minval(m_glob),maxval(m_glob)
-    ! print*,'minv_loc',minval(minv_loc),maxval(minv_loc)
-    ! print*,'minv_glob',minval(minv_glob),maxval(minv_glob)
-    ! print*,'s_loc',minval(s_loc),maxval(s_loc)
-    ! print*,'s_glob',minval(s_glob),maxval(s_glob)
-    ! print*,'Fp',minval(Fp),maxval(Fp)
-    ! print*,'Fv',minval(Fv),maxval(Fv)
-    ! print*,'Dp',minval(Dp),maxval(Dp)
-    ! print*,'Dv',minval(Dv),maxval(Dv)
-
+ 
     Ap_full=0.0
     Av_full=0.0
     App_full=0.0
@@ -950,14 +941,15 @@ contains
   end subroutine init_acoustic_operator_abc
   
   
-  !**************** RESOLUTION DU PROBLEM *************************************
+  !**************** PROBLEM RESOLUTION **** *************************************
+  ! Makes one forward time step
   subroutine one_forward_step(problem,t)
     type(acoustic_problem),intent(inout) :: problem
     real,                  intent(in)    :: t
 
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv0,RHSp0
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv1,RHSp1
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv2,RHSp2
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu0,RHSp0
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu1,RHSp1
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu2,RHSp2
     real,dimension(problem%DoF*problem%nb_elem) :: U1,U2,U3,U4
     real,dimension(problem%DoF*problem%nb_elem) :: P1,P2,P3,P4
     real                                        :: gd,gg
@@ -980,10 +972,10 @@ contains
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
 
        call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
-       problem%RHSv_half=FU_half 
+       problem%RHSu_half=FU_half 
        problem%RHSp_half=FP_half      
        call eval_RHS(FP_1,FU_1,problem,t)
-       problem%RHSv=FU_1
+       problem%RHSu=FU_1
        problem%RHSp=FP_1
 
        call RK4_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
@@ -991,34 +983,29 @@ contains
 
     else if (problem%time_scheme.eq.'AB3') then
 
-       !call eval_RHS(RHSp,RHSv,problem,t-problem%dt)
-
-       ! call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-       !                  RHSp,RHSv,problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
-
        RHSp0=0.0
-       RHSv0=0.0
+       RHSu0=0.0
        RHSp1=0.0
-       RHSv1=0.0
+       RHSu1=0.0
        RHSp2=0.0
-       RHSv2=0.0
+       RHSu2=0.0
        
-       call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
-       problem%RHSv=RHSv0
+       call eval_RHS(RHSp0,RHSu0,problem,t-problem%dt)
+       problem%RHSu=RHSu0
        problem%RHSp=RHSp0
-       call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
-       call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
+       call eval_RHS(RHSp2,RHSu1,problem,t-2*problem%dt)
+       call eval_RHS(RHSp2,RHSu2,problem,t-3*problem%dt)
        
        call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-                      RHSp0,RHSv0,                                              &
-                      RHSp1,RHSv1,                                              &
-                      RHSp2,RHSv2,                                              &
+                      RHSp0,RHSu0,                                              &
+                      RHSp1,RHSu1,                                              &
+                      RHSp2,RHSu2,                                              &
                       problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
       
     end if
   end subroutine one_forward_step
 
-
+  ! Makes all the forward steps
   subroutine all_forward_step(problem)
     type(acoustic_problem),intent(inout) :: problem
     integer                              :: i
@@ -1031,17 +1018,17 @@ contains
   end subroutine all_forward_step
 
 
-  
+  ! Frees the acoustic problem variables
   subroutine free_acoustic_problem(problem)
     type(acoustic_problem),intent(inout) :: problem
     deallocate(problem%U)
     deallocate(problem%P)
     deallocate(problem%density)
     deallocate(problem%velocity)
-    deallocate(problem%RHSv)
+    deallocate(problem%RHSu)
     deallocate(problem%RHSp)
     if (problem%time_scheme.eq.'RK4') then
-    deallocate(problem%RHSv_half)
+    deallocate(problem%RHSu_half)
     deallocate(problem%RHSp_half)
     end if
     call free_sparse_matrix(problem%Ap)
@@ -1054,7 +1041,50 @@ contains
   end subroutine free_acoustic_problem
 
 
-  subroutine error_periodique(problem,t,errorU,errorP,iter)
+  ! Evaluates the RHS for the forward problem at time=t
+  subroutine eval_RHS(RHSp,RHSu,problem,t)
+    real,dimension(:)   ,intent(inout) :: RHSp
+    real,dimension(:)   ,intent(inout) :: RHSu
+    type(acoustic_problem),intent(in)  :: problem
+    real                  ,intent(in)  :: t
+    
+    real    :: gg,gd,f0
+    integer :: last_node
+    
+    RHSp=0.0
+    RHSu=0.0
+    f0=2.5
+
+    last_node=problem%DoF*problem%nb_elem
+
+    if (t.le.0.0) then
+       RHSp=0.0
+       RHSu=0.0
+    else
+
+       if (problem%boundaries.eq.'dirichlet') then
+          gg=min(0.5*t,0.5)
+          gd=-gg
+          RHSu(1)=gg*(-1.0+0.0*problem%alpha)
+          RHSu(last_node)=gd*(1.0-0.0*problem%alpha)
+       end if
+
+       if (problem%signal.eq.'flat') then
+          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
+          !gg=sin(4*PI*t)
+          !gg=1.0
+          RHSp((problem%source_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha)
+       end if
+    end if
+
+    RHSp=sparse_matmul(problem%Minv_p,RHSp)
+    RHSu=sparse_matmul(problem%Minv_v,RHSu)
+  end subroutine eval_RHS
+
+
+
+  ! Evaluates the Error for an homogeneous periodic test case 
+  subroutine error_periodic(problem,t,errorU,errorP,iter)
     type(acoustic_problem),intent(in)  :: problem
     real                  ,intent(in)  :: t
     real                  ,intent(out) :: errorU
@@ -1069,7 +1099,7 @@ contains
     integer                                     :: i,j,k
     integer                                     :: DoF,nb_elem
 
-    if (problem%boundaries.ne.'periodique') then
+    if (problem%boundaries.ne.'periodic') then
        print*,'The error cannot be calculated'
        print*,'The boundary conditions are not periodic'
        RETURN
@@ -1089,8 +1119,8 @@ contains
              x=x+problem%total_length
           end do
           
-          U_ex((i-1)*DoF+j)=solution(x,0.0,problem%signal)
-          P_ex((i-1)*DoF+j)=solution(x,-problem%dt,problem%signal)
+          U_ex((i-1)*DoF+j)=initial_perturbation(x,0.0,problem%signal)
+          P_ex((i-1)*DoF+j)=initial_perturbation(x,-problem%dt,problem%signal)
        end do
     end do
 
@@ -1122,48 +1152,5 @@ contains
     print*,'Lerreur en P est de : ', errorP
     print*,'-----------------------------'    
     print*,'-----------------------------'
-
-  end subroutine error_periodique
-
-  
-  subroutine eval_RHS(RHSp,RHSv,problem,t)
-    real,dimension(:)   ,intent(inout) :: RHSp
-    real,dimension(:)   ,intent(inout) :: RHSv
-    type(acoustic_problem),intent(in)  :: problem
-    real                  ,intent(in)  :: t
-    
-    real    :: gg,gd,f0
-    integer :: last_node
-    
-    RHSp=0.0
-    RHSv=0.0
-    f0=2.5
-
-    last_node=problem%DoF*problem%nb_elem
-
-    if (t.le.0.0) then
-       RHSp=0.0
-       RHSv=0.0
-    else
-
-       if (problem%boundaries.eq.'dirichlet') then
-          gg=min(0.5*t,0.5)
-          gd=-gg
-          RHSv(1)=gg*(-1.0+0.0*problem%alpha)
-          RHSv(last_node)=gd*(1.0-0.0*problem%alpha)
-       end if
-
-       if (problem%signal.eq.'flat') then
-          gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-          !gg=sin(4*PI*t)
-          !gg=1.0
-          RHSp((problem%source_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha)
-       end if
-    end if
-
-    RHSp=sparse_matmul(problem%Minv_p,RHSp)
-    RHSv=sparse_matmul(problem%Minv_v,RHSv)
-
-  end subroutine eval_RHS
-
+  end subroutine error_periodic  
 end module m_acoustic

@@ -16,7 +16,7 @@ module m_matrix
              init_sparse_matrix,get_NNN,Full2Sparse,print_sparse_matrix,        &
              sparse_matmul,is_sym,free_sparse_matrix,sparse_MV,sparse_MM
 
-    interface sparse_matmul
+  interface sparse_matmul
      module procedure sparse_MV
      module procedure sparse_MM
   end interface sparse_matmul
@@ -51,9 +51,6 @@ contains
     call DGETRF(n, n, LU_inv, n, ipiv, info)
 
     if (info /= 0) then
-       ! do i=1,n
-       !    write(22,*) A(i,:)
-       ! end do
        stop 'Matrix is numerically singular!'
     end if
 
@@ -65,11 +62,11 @@ contains
     if (info /= 0) then
        stop 'Matrix inversion failed!'
     end if
-
   end function LU_inv
 
 
-  !************ UNCTION SPARSE MATRIX ******************************************
+  !************ SPARSE MATRIX FUNCTIONS *****************************************
+  ! Initialize the sparse matrix
   subroutine init_sparse_matrix(A,NNN,nb_ligne,IA,JA,Values)
     type(sparse_matrix),intent(inout) :: A
     integer            ,intent(in)    :: NNN
@@ -98,7 +95,8 @@ contains
     end if
   end subroutine init_sparse_matrix
 
-  
+
+  !Dellallocate the sparse matrix
   subroutine free_sparse_matrix(A)
        type(sparse_matrix),intent(inout) :: A
     deallocate(A%Values)
@@ -107,6 +105,7 @@ contains
   end subroutine free_sparse_matrix
     
 
+  ! Get the number of non zero values in a full matrix
   function get_NNN(A)
     real,dimension(:,:),intent(in) :: A
     integer                        :: get_NNN
@@ -123,7 +122,8 @@ contains
     end do
   end function get_NNN
 
-  
+
+  ! Change a matrix in a sparse one
   subroutine Full2Sparse(Full,Sparse)
     real,dimension(:,:),intent(in)  :: Full
     type(sparse_matrix),intent(out) :: Sparse
@@ -149,10 +149,11 @@ contains
     end do
   end subroutine Full2Sparse
 
+
+  ! Change a sparse matrix in a full one
   subroutine Sparse2Full(sparse,full)
     type(sparse_matrix),intent(in)    :: sparse
     real,dimension(:,:),allocatable,intent(inout) :: full
-
     integer :: i,j,nb_value,iia
     
     allocate(full(sparse%nb_ligne,sparse%nb_ligne))
@@ -164,11 +165,10 @@ contains
           full(i,sparse%JA(nb_value+iia))=sparse%Values(nb_value+iia)
        end do
     end do
-
-!    deallocate(full)
-    
   end subroutine Sparse2Full
-    
+
+
+  ! Evalue the transposition of a sparse matrix
   subroutine transpose_sparse(sparse,t_sparse)
     type(sparse_matrix),intent(in)  :: sparse
     type(sparse_matrix),intent(inout) :: t_sparse
@@ -179,10 +179,10 @@ contains
     call Full2Sparse(transpose(full),t_sparse)
 
     deallocate(full)
-    
   end subroutine transpose_sparse
 
 
+  ! Apply a sparse matrix/vector product
   function sparse_MV(A,X)
     type(sparse_matrix),intent(in) :: A
     real,dimension(:)  ,intent(in) :: X
@@ -197,6 +197,8 @@ contains
     end do
   end function sparse_MV
 
+
+  ! Apply a matrix/matrix sparse product
   function sparse_MM(A,B)
     type(sparse_matrix),intent(in)  :: A
     type(sparse_matrix),intent(in)  :: B
@@ -215,6 +217,7 @@ contains
 
   !************ TEST FUNCTIONS  *************************************************
 
+  ! Print the  variables of sparse matrix
   subroutine print_sparse_matrix(A)
     type(sparse_matrix),intent(in) :: A
 
@@ -226,59 +229,60 @@ contains
   end subroutine print_sparse_matrix
 
   
+  ! Test if a matrix is symetric or not
   subroutine is_sym(A)
-  real,dimension(:,:),intent(in) :: A
-  integer :: i,j
-  logical :: test
+    real,dimension(:,:),intent(in) :: A
+    integer :: i,j
+    logical :: test
 
-  test=.TRUE.  
-  do i=1,size(A,1)
-     do j=i,size(A,1)
+    test=.TRUE.  
+    do i=1,size(A,1)
+       do j=i,size(A,1)
 
-        if (A(i,j).ne.A(j,i)) then
-           test=.FALSE.
-           exit
-        end if
-     end do
-     if (.not.test) exit
-  end do
+          if (A(i,j).ne.A(j,i)) then
+             test=.FALSE.
+             exit
+          end if
+       end do
+       if (.not.test) exit
+    end do
 
-  if (test) then
-     print*,'IS SYMETRIC'
-  else
-     print*,'IS NOT SYMETRIC'
-  end if
-end subroutine is_sym
+    if (test) then
+       print*,'IS SYMETRIC'
+    else
+       print*,'IS NOT SYMETRIC'
+    end if
+  end subroutine is_sym
 
-subroutine sparse_is_sym(sparse_A)
-  type(sparse_matrix),intent(in) :: sparse_A
-  real,dimension(:,:),allocatable:: A
-  integer :: i,j
-  logical :: test
 
-  call Sparse2Full(sparse_A,A)
-  
-  test=.TRUE.  
-  do i=1,size(A,1)
-     do j=i,size(A,1)
+  ! Test if a sparse matrix is symetric or not
+  subroutine sparse_is_sym(sparse_A)
+    type(sparse_matrix),intent(in) :: sparse_A
+    real,dimension(:,:),allocatable:: A
+    integer :: i,j
+    logical :: test
 
-        if (A(i,j).ne.A(j,i)) then
-           test=.FALSE.
-           exit
-        end if
-     end do
-     if (.not.test) exit
-  end do
+    call Sparse2Full(sparse_A,A)
 
-  if (test) then
-     print*,'IS SYMETRIC'
-  else
-     print*,'IS NOT SYMETRIC'
-  end if
+    test=.TRUE.  
+    do i=1,size(A,1)
+       do j=i,size(A,1)
 
-  deallocate(A)
-  
-end subroutine sparse_is_sym
+          if (A(i,j).ne.A(j,i)) then
+             test=.FALSE.
+             exit
+          end if
+       end do
+       if (.not.test) exit
+    end do
 
+    if (test) then
+       print*,'IS SYMETRIC'
+    else
+       print*,'IS NOT SYMETRIC'
+    end if
+
+    deallocate(A)
+  end subroutine sparse_is_sym
 
 end module m_matrix

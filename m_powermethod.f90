@@ -1,3 +1,5 @@
+! This module contain the power method used to determine the maximal eigen values
+! employed to determine the CFL
 module m_powermethod
   use m_matrix
 
@@ -8,6 +10,9 @@ module m_powermethod
 
 contains
 
+  !*************** PUBLIC *******************************************************
+  
+  ! Power method employed on a full matrix
   subroutine power_method(A,max_value,k_max,epsilon)
     real,dimension(:,:),intent(in)  :: A
     real               ,intent(out) :: max_value
@@ -36,16 +41,12 @@ contains
        r=norm(q2-q1)
        q1=q2
        k=k+1
-
-       ! if (modulo(k,100).eq.0) then
-       !    print*,k,r,max_value,q1(1),q1(2),q1(3)
-       ! end if
-
     end do
     deallocate(z,q1,q2)
-
   end subroutine power_method
 
+
+  ! Power method employed on asparse matrix
   subroutine power_method_sparse(A,max_value,k_max,epsilon)
     type(sparse_matrix),intent(in)  :: A
     real               ,intent(out) :: max_value
@@ -67,23 +68,18 @@ contains
        r=norm(q2-q1)/norm(q1)
        q1=q2
        k=k+1
-
-       ! if (modulo(k,100).eq.0) then
-       !    print*,k,r,max_value
-       ! end if 
-
     end do
-    
     deallocate(z,q1,q2)
-
  end subroutine power_method_sparse
 
 
-  function norm(v)
+ !********** PRIVATE ************************************************************
+ 
+ ! Calculate the norm of a vector
+ function norm(v)
     real,dimension(:),intent(in) :: v
     real                         :: norm
     norm=sqrt(dot_product(v,v))
   end function norm
-
 
 end module m_powermethod

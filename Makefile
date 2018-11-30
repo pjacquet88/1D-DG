@@ -20,4 +20,4 @@ run:    m_matrix.o m_time_scheme.o m_powermethod.o m_polynom.o m_file_function.o
 	$(FC) $(CFLAGS) $^ -o $@  $(LDFLAG)
 
 clean:
-	rm -f *.o *.mod *~ *.png fort.* Files/* animate.gif receiver.dat run
+	rm -f *.o *.mod *~ *.png fort.* Files/* animate.gif *.dat run

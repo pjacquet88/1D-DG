@@ -1,4 +1,4 @@
-program main!
+program main
   use m_file_function
   use m_polynom
   use m_matrix
@@ -10,25 +10,24 @@ program main!
   implicit none
 
   !*************** Problem Parameters *******************************************
-  integer         ,parameter :: nb_elem=100         ! Nb of elements (all same length)
+  integer         ,parameter :: nb_elem=100          ! Nb of elements (all same length)
   integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
   real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=3.0      ! final time
-  character(len=*),parameter :: time_scheme='AB3'    ! change the time scheme
+  real            ,parameter :: final_time=3.0       ! final time
+  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
   real            ,parameter :: alpha=1.0            ! Penalisation value
   character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
-  character(len=*),parameter :: boundaries='ABC' ! Boundary Conditions
-  logical         ,parameter :: bernstein=.false.    ! If F-> Lagrange Elements
-  integer         ,parameter :: k_max=1e3            ! itlsr max for power method algo.
+  character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
+  logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
+  integer         ,parameter :: k_max=1e3            ! iterr max for power method algo.
   real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
-  integer         ,parameter :: n_frame=200          ! nb of times where sol. is saved
   integer         ,parameter :: source_loc=1         ! location of the source (elemts)
-  integer         ,parameter :: receiver_loc=30    ! location of the receiver(elemts)
+  integer         ,parameter :: receiver_loc=30      ! location of the receiver(elemts)
 
   character(len=*),parameter :: strategy='DTA'
   logical         ,parameter :: adjoint_test=.false.
   character(len=*),parameter :: scalar_product='canonical'
-  integer         ,parameter :: nb_iter_fwi=0
+  integer         ,parameter :: nb_iter_fwi=50
   
   real,dimension(nb_elem)    :: velocity ! velocity model change the size to change the model 
   real,dimension(1)          :: density  ! density model change the size to change the model
@@ -36,10 +35,9 @@ program main!
   
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter          :: animation=.false.
-  logical,parameter          :: sortie=.false. ! animation an RTM not working if F
-  logical,parameter          :: RTM=.false.    ! if F -> just forward
-  logical,parameter          :: use_data_model=.true.! if T, data = forward receiver
+  logical,parameter           :: animation2=.false.
+  character(len=*),parameter  :: animation='model_update' ! no,data_forward,fwi_forward,fwi_backward,model_updates
+  logical,parameter           :: bool_fwi=.true.          ! if F -> just perform forward for data
   !******************************************************************************
 
 
@@ -56,6 +54,9 @@ program main!
   integer,dimension(:), allocatable :: seed
   real                              :: t0,t1,t2,t3
   logical                           :: file_exists
+  integer                           :: data_time_step
+  integer                           :: fwi_time_step
+  integer                           :: n_frame
   !******************************************************************************
 
   call date_and_time(values=values)
@@ -63,14 +64,6 @@ program main!
   allocate(seed(1:k))
   seed(:) = values(8)
   call random_seed(put=seed)
-  !******************************************************************************
-
-  
-  !******************************************************************************
-  !********************* ACOUSTIC EQUATION SIMULATION  **************************
-
-
-  !********************** Initialization ***************************************
   
   !*********** Polynomial initialization *************
   call init_basis_b(ordre)
@@ -78,25 +71,9 @@ program main!
   call create_B2L
   call create_L2B
   call create_derive(ordre)
-  
-  ! do j=1,DoF
-  !    do i=0,nb_elem
-  !       write(100+j,*) real(i)/real(nb_elem),eval_polynom_l(base_l(j,:),real(i)/real(nb_elem))
-  !    end do
-  ! end do
-  ! STOP
-  !***************************************************
-
-  
-  !********** Model Initialization *******************
-  ! do i=1,size(velocity)
-  !    velocity(i)=i
-  ! end do
-  ! velocity(1)=1.0
-  ! velocity(2)=1.2
-  ! velocity(3)=1.5
 
 
+  !********** Data model initialization *************
   do i=1,33
      velocity(i)=1.0
   end do
@@ -105,7 +82,7 @@ program main!
   end do
   
   do i=67,100
-     velocity(i)=1.5
+     velocity(i)=1.2
   end do
 
   ! do i=76,100
@@ -125,21 +102,26 @@ program main!
                     total_length,final_time,alpha,bernstein,signal,boundaries,           &
                     k_max,epsilon,source_loc,receiver_loc)
 
+  data_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))
   allocate(data_U(0:forward%n_time_step,2))
-  !print*,'Il y a ',forward%n_time_step,'time steps'
+  
   t=0
   data_P(0,1)=0.0
   data_P(0,2)=0.0
-  !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+  if (animation.eq.'data_forward') then
+     call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+  end if
   do i=1,forward%n_time_step
      t=i*forward%dt
      call one_forward_step(forward,t)
      data_P(i,1)=t
      data_P(i,2)=forward%P((receiver_loc-1)*DoF+1)
-     !if (modulo(i,100).eq.0) then
-        !call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
-     !end if
+     if (animation.eq.'data_forward')  then
+        if (modulo(i,10).eq.0) then
+           call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+        end if
+     end if
   end do
   data_U=0.0
 
@@ -154,60 +136,135 @@ program main!
   call cpu_time(t0)
   
 
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+  if (bool_fwi) then
+     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+     print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
-  call init_fwi(fwi,nb_iter_fwi,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
-       total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
-       receiver_loc,strategy,scalar_product,animation,adjoint_test)
+     call init_fwi(fwi,nb_iter_fwi,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
+          total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
+          receiver_loc,strategy,scalar_product,animation2,adjoint_test)
 
-  do i=0,fwi%nb_iter
-     
-     do j=1,33
-        fwi%velocity_model(j)=1.0
+     do i=1,fwi%nb_iter
+        print*,'size velocity model',size(fwi%velocity_model)
+        fwi%current_iter=i
+        print*,'Iteration n°',fwi%current_iter,'/',fwi%nb_iter
+        call one_fwi_step(fwi)
      end do
-     do j=34,66
-        fwi%velocity_model(j)=1.1
-     end do
+     call free_fwi(fwi)
+  end if
 
-     do j=67,100
-        fwi%velocity_model(j)=1.4
-     end do
-
-     ! do j=76,100
-     !    fwi%velocity_model(j)=1.0
-     ! end do
-    
-     
-     if (i.ne.0) then
-        fwi%velocity_model(i)=fwi%velocity_model(i)+1.0e-5
-     end if
-
-
-     
-     fwi%current_iter=i
-     print*,'Iteration n°',fwi%current_iter,'/',fwi%nb_iter
-     call one_fwi_step(fwi)
-  end do
-
-  call free_fwi(fwi)
-
-
-
-    !--------------------- Animation ----------------------------------------------
-  !n_frame=int(forward%n_time_step/forward%n_display)
-
-     ! open(unit=78,file='script.gnuplot',action='write')
-     ! write(78,*)'load "trace1.gnuplot"'
-     ! write(78,*)'n=',nb_iter_fwi
-     ! write(78,*)'a=',1
-     ! write(78,*)'load "trace2.gnuplot"'
-     ! close(78)
   
-     ! call system('gnuplot script.gnuplot')
-!     call system ('nw animate.gif &')
+  !--------------------- Animation ----------------------------------------------
+  if (animation.eq.'no') then
+     print*,'No animation has been made'
+  else if (animation.eq.'model_update') then
+
+     n_frame=nb_iter_fwi
+
+     open(unit=78,file='gnuplot_script/script.gnuplot',action='write')
+     write(78,*)'load "gnuplot_script/trace1.gnuplot"'
+     write(78,*)'n=',nb_iter_fwi
+     write(78,*)'a=',1
+     write(78,*)'load "gnuplot_script/trace2.gnuplot"'
+     close(78)
+
+     open(unit=79,file='gnuplot_script/trace2.gnuplot',action='write')
+     write(79,*)'dt=0.1/n'
+     write(79,*)'i=0'
+     write(79,*)'set yrange[0:2]'
+     write(79,*)'load "gnuplot_script/animate.gnuplot"'
+     close(79)
+
+     open(unit=80,file='gnuplot_script/animate.gnuplot',action='write')
+     write(80,*) "plot 'Files/VP'.i.'.dat' w l title 'Velocity model'.i"
+     write(80,*) "i=i+a"
+     write(80,*) "if (i<n) reread"
+     close(80)
+
+     call system("gnuplot gnuplot_script/script.gnuplot")
+     call system("eog animate.gif")
+     
+  elseif(animation.eq.'data_forward') then
     
+     n_frame=data_time_step
+
+     open(unit=78,file='gnuplot_script/script.gnuplot',action='write')
+     write(78,*)'load "gnuplot_script/trace1.gnuplot"'
+     write(78,*)'n=',n_frame
+     write(78,*)'a=',10
+     write(78,*)'load "gnuplot_script/trace2.gnuplot"'
+     close(78)
+
+     open(unit=79,file='gnuplot_script/trace2.gnuplot',action='write')
+     write(79,*)'dt=0.1/n'
+     write(79,*)'i=0'
+     write(79,*)'set yrange[-0.5:0.5]'
+     write(79,*)'load "gnuplot_script/animate.gnuplot"'
+     close(79)
+
+     open(unit=80,file='gnuplot_script/animate.gnuplot',action='write')
+     write(80,*) "plot 'Files/FP'.i.'.dat' w l title 'Forward data pressure'.i"
+     write(80,*) "i=i+a"
+     write(80,*) "if (i<n) reread"
+     close(80)
+
+     call system("gnuplot gnuplot_script/script.gnuplot")
+     call system("eog animate.gif")
+     
+     elseif(animation.eq.'fwi_forward') then
+        
+    n_frame=data_time_step
+    open(unit=78,file='gnuplot_script/script.gnuplot',action='write')
+     write(78,*)'load "gnuplot_script/trace1.gnuplot"'
+     write(78,*)'n=',n_frame
+     write(78,*)'a=',10
+     write(78,*)'load "gnuplot_script/trace2.gnuplot"'
+     close(78)
+
+     open(unit=79,file='gnuplot_script/trace2.gnuplot',action='write')
+     write(79,*)'dt=0.1/n'
+     write(79,*)'i=0'
+     write(79,*)'set yrange[-0.5:0.5]'
+     write(79,*)'load "gnuplot_script/animate.gnuplot"'
+     close(79)
+
+     open(unit=80,file='gnuplot_script/animate.gnuplot',action='write')
+     write(80,*) "plot 'Files/P'.i.'.dat' w l title 'Forward fwi pressure'.i"
+     write(80,*) "i=i+a"
+     write(80,*) "if (i<n) reread"
+     close(80)
+
+     call system("gnuplot gnuplot_script/script.gnuplot")
+     call system("eog animate.gif")
+     
+  elseif(animation.eq.'fwi_backward') then
+     
+     n_frame=data_time_step
+     open(unit=78,file='gnuplot_script/script.gnuplot',action='write')
+     write(78,*)'load "gnuplot_script/trace1.gnuplot"'
+     write(78,*)'n=',n_frame
+     write(78,*)'a=',10
+     write(78,*)'load "gnuplot_script/trace2.gnuplot"'
+     close(78)
+
+     open(unit=79,file='gnuplot_script/trace2.gnuplot',action='write')
+     write(79,*)'dt=0.1/n'
+     write(79,*)'i=0'
+     write(79,*)'set yrange[-0.2:0.2]'
+     write(79,*)'load "gnuplot_script/animate.gnuplot"'
+     close(79)
+
+     open(unit=80,file='gnuplot_script/animate.gnuplot',action='write')
+     write(80,*) "plot 'Files/QP'.i.'.dat' w l title 'Backward fwi pressure'.i"
+     write(80,*) "i=i+a"
+     write(80,*) "if (i<n) reread"
+     close(80)
+
+     call system("gnuplot gnuplot_script/script.gnuplot")
+     call system("eog animate.gif")
+  end if
+
   !------------------------ Free Variables --------------------------------------
   call free_basis_b
   call free_basis_l

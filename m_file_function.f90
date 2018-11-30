@@ -1,13 +1,15 @@
+! This module contain some function concerning files and vectors
 module m_file_function
   use m_polynom
   implicit none
 
   public  :: load,print_vect,laplace_filter
-
   private :: norm,nb_line
 
 contains
 
+  !*************** PRIVATE ******************************************************
+  ! Calculate the norm of a vector U
   function norm(U)
     real,dimension(:),intent(in) :: U
     real                         :: norm
@@ -15,7 +17,27 @@ contains
     norm=sqrt(dot_product(U,U))
   end function norm
 
-  
+
+
+  ! Get the number of line of a file
+  function nb_line(fichier)
+    character(len=*),intent(in) :: fichier
+    integer :: ierr ! successful (if == 0) ou failed (si /= 0)
+    integer :: nb_line
+    open(12,file=fichier, form="formatted", iostat=ierr,status="old")
+
+    nb_line = 0
+    do while (ierr==0)
+       read(12,*,iostat=ierr)
+       if (ierr==0) nb_line = nb_line + 1
+    enddo
+    close(12)
+  end function nb_line
+
+
+
+  !*************** PUBLIC   *****************************************************
+  ! Load a vector in a specific file .dat
   subroutine load(U,char,N)
     real,dimension(:),intent(inout):: U
     character(len=*) ,intent(in)   :: char
@@ -34,23 +56,10 @@ contains
     close(456)
   end subroutine load
 
-  
-  function nb_line(fichier)
-    character(len=*),intent(in) :: fichier
-    integer :: ierr ! successful (if == 0) ou failed (si /= 0)
-    integer :: nb_line
-    open(12,file=fichier, form="formatted", iostat=ierr,status="old")
-
-    nb_line = 0
-    do while (ierr==0)
-       read(12,*,iostat=ierr)
-       if (ierr==0) nb_line = nb_line + 1
-    enddo
-    close(12)
-  end function nb_line
 
    !***************** SORTIE DE RESULTAT *********************************
-  
+
+  ! Print a vector in a specific file
   subroutine print_vect(vector,nb_elem,DoF,dx,bernstein,N,name)
     real,dimension(nb_elem*DoF),intent(in) :: vector
     integer                    ,intent(in) :: nb_elem
@@ -100,6 +109,7 @@ contains
   end subroutine print_vect
   
 
+  ! Add a laplacian filter on a vector
   function laplace_filter(u)
     real,dimension(:),intent(in)    :: u
     real,dimension(size(u),size(u)) :: L,Linv,test

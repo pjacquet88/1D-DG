@@ -5,7 +5,8 @@ module m_adjoint
   use m_file_function
   use m_time_scheme
   implicit none
-  
+
+  ! Acoustinc Adjoint problem type
   type adjoint_problem
      integer                         :: DoF          ! nb of degree of freedom 
      integer                         :: nb_elem      ! nb of elements
@@ -34,19 +35,18 @@ module m_adjoint
      !----------- SOURCE & RECEIVER ------------------
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
-
      integer                         :: n_time_step   ! nb of time step
 
-     real,dimension(:,:),allocatable :: data_P
-     real,dimension(:,:),allocatable :: data_U
-     real,dimension(:,:),allocatable :: P_received
-     real,dimension(:,:),allocatable :: U_received
+     real,dimension(:,:),allocatable :: data_P        ! pressure data received through time
+     real,dimension(:,:),allocatable :: data_U        ! velocity data received through time
+     real,dimension(:,:),allocatable :: P_received    ! simulated pressure received
+     real,dimension(:,:),allocatable :: U_received    ! simulated data received
 
-     character(len=20)               :: strategy
-     character(len=20)               :: scalar_product
+     character(len=20)               :: strategy      ! Strategy employed : ATD or DTA 
+     character(len=20)               :: scalar_product! canonical or M inner product
 
-     real,dimension(:)  ,allocatable :: RHSv
-     real,dimension(:)  ,allocatable :: RHSv_half
+     real,dimension(:)  ,allocatable :: RHSu
+     real,dimension(:)  ,allocatable :: RHSu_half
      real,dimension(:)  ,allocatable :: RHSp
      real,dimension(:)  ,allocatable :: RHSp_half
   end type adjoint_problem
@@ -54,11 +54,11 @@ module m_adjoint
   real,dimension(15)                 :: xx,weight
   real,parameter :: PI=acos(-1.0)
 
-  public  :: init_adjoint_problem,init_adjoint_operator,all_backward_step,one_backward_step,            &
-             free_adjoint_problem,Int_lxl,Int_bxb
+  public  :: init_adjoint_problem,init_adjoint_operator,all_backward_step,      &
+             one_backward_step,free_adjoint_problem,Int_lxl,Int_bxb
 
-  private :: xx,weight,solution,PI,                                             &
-             init_quadrature,init_m_loc,init_s_loc,             &
+  private :: xx,weight,initial_perturbation,PI,                                             &
+             init_quadrature,init_m_loc,init_s_loc,                             &
              init_UP,init_m_glob,init_minv_glob,init_minv_glob_abc,init_mabs,   &
              init_s_glob,init_FpFv,init_DpDv,init_dt,eval_backward_source
   
@@ -66,6 +66,7 @@ contains
 
 
   !****************** QUADRATURE ***********************************************
+  ! Initializes the quadrature to evaluate polynomial integrals
   subroutine init_quadrature
     integer :: i
     xx(1)=6.0037409897572858D-3
@@ -92,7 +93,7 @@ contains
     end do
   end subroutine init_quadrature
 
-
+  ! Evaluates the integral of the product of 2 bernstein polyniomials
   function Int_bxb(bpol1,bpol2)
     real,dimension(:),intent(in) :: bpol1
     real,dimension(:),intent(in) :: bpol2
@@ -106,11 +107,11 @@ contains
             +eval_polynom_b(bpol1,xx(i))&
             *eval_polynom_b(bpol2,xx(i))&
             *weight(i)
-    end do
-    
+    end do    
   end function Int_bxb
 
-  
+
+  ! Evaluates the integral of the product of 2 lagrange polynomials
   function Int_lxl(lpol1,lpol2)
     real,dimension(:),intent(in) :: lpol1
     real,dimension(:),intent(in) :: lpol2
@@ -129,42 +130,44 @@ contains
 
 
   !******************* INIT PROBLEM **************************************
-  
-  function solution(x,dt,signal)
+  ! Contains the initial perturbation
+  function initial_perturbation(x,dt,signal)
     real,intent(in) :: x
     real,intent(in) :: dt
     character(len=*),intent(in) :: signal
-    real                        :: solution
+    real                        :: initial_perturbation
 
     real                        :: xt
 
     xt=x+dt
     
     if (signal.eq.'sinus') then
-       solution=sin(4*PI*xt)
-       ! solution=sin(xt)
+       initial_perturbation=sin(4*PI*xt)
+       ! initial_perturbation=sin(xt)
     else if (signal.eq.'boxcar') then
        if ((x.lt.0.55).and.(x.gt.0.45)) then
-          solution=0.5
+          initial_perturbation=0.5
        else
-          solution=0.0
+          initial_perturbation=0.0
        end if
     else if (signal.eq.'x') then
-       solution=xt**5
+       initial_perturbation=xt**5
         else if (signal.eq.'flat') then
-       solution=0.0
+       initial_perturbation=0.0
     else
-       solution=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
+       initial_perturbation=(xt-0.5)*exp(-(2.0*PI*(xt-0.5)*2.0)**2.0)*20
     end if    
-  end function solution
+  end function initial_perturbation
 
 
+  ! Initializes the adjoint acoustic problem
   subroutine init_adjoint_problem(problem,nb_elem,DoF,time_scheme,velocity,     &
                                   density,total_length,final_time,              &
                                   alpha,bernstein,signal,boundaries,k_max,      &
                                   epsilon,source_loc,receiver_loc, data_P,      &
                                   data_U,P_received,U_received,strategy,        &
                                   scalar_product)
+    
     type(adjoint_problem) ,intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
     integer               ,intent(in)  :: DoF
@@ -289,8 +292,6 @@ contains
     !    print*,'The problem is solved with Lagrange elements'
     ! end if
     ! print*,'------------------------------------------------------------'    
-
-
     allocate(problem%data_P(size(data_P,1),size(data_P,2)))
     problem%data_P=data_P
     allocate(problem%data_U(size(data_U,1),size(data_U,2)))
@@ -300,16 +301,16 @@ contains
     allocate(problem%U_received(size(U_received,1),size(U_received,2)))   
     problem%U_received=U_received
 
-    allocate(problem%RHSv(nb_elem*DoF))
+    allocate(problem%RHSu(nb_elem*DoF))
     allocate(problem%RHSp(nb_elem*DoF))
     if (time_scheme.eq.'RK4') then
-       allocate(problem%RHSv_half(nb_elem*DoF))
+       allocate(problem%RHSu_half(nb_elem*DoF))
        allocate(problem%RHSp_half(nb_elem*DoF))
     end if
-
   end subroutine init_adjoint_problem
 
-  
+
+  ! Initialize P and U at time=0
   subroutine init_UP(problem)
     type(adjoint_problem),intent(inout) :: problem
     integer                              :: i,j,DoF
@@ -328,8 +329,8 @@ contains
     do i=1,problem%nb_elem
        do j=1,DoF
           x=(i-1)*problem%dx+(j-1)*ddx
-          problem%U((i-1)*problem%DoF+j)=solution(x,0.0,problem%signal)
-          problem%P((i-1)*problem%DoF+j)=solution(x,dephasing,problem%signal)
+          problem%U((i-1)*problem%DoF+j)=initial_perturbation(x,0.0,problem%signal)
+          problem%P((i-1)*problem%DoF+j)=initial_perturbation(x,dephasing,problem%signal)
        end do
     end do
 
@@ -343,7 +344,7 @@ contains
   
 
  !--------------------- Init Matrices ------------------------------------
-
+  ! Initializes the local masse matrix (on one element)
   subroutine init_m_loc(m_loc,DoF,bernstein)
     real,dimension(:,:),intent(out) :: m_loc
     integer            ,intent(in)  :: DoF
@@ -373,7 +374,7 @@ contains
     
   end subroutine init_m_loc
 
-  
+  ! Initializes the local inverse mass matrix (on one element)
   subroutine init_minv_loc(minv_loc,m_loc)
     real,dimension(:,:),intent(out) :: minv_loc
     real,dimension(:,:),intent(in)  :: m_loc
@@ -381,7 +382,7 @@ contains
     minv_loc=LU_inv(m_loc)
   end subroutine init_minv_loc
 
-  
+  ! Initialize the global mass matrix (on all the elements)  
   subroutine init_m_glob(m_glob,m_loc,nb_elem)
     real,dimension(:,:),intent(out) :: m_glob
     real,dimension(:,:),intent(in)  :: m_loc
@@ -398,7 +399,8 @@ contains
     end do
   end subroutine init_m_glob
   
-  
+
+  ! Initialize the global inverse mass matrix (on all the element)
   subroutine init_minv_glob(minv_glob,minv_loc,nb_elem)
     real,dimension(:,:),intent(out) :: minv_glob       
     real,dimension(:,:),intent(in)  :: minv_loc
@@ -415,6 +417,8 @@ contains
 
   end subroutine init_minv_glob
 
+
+  ! initialize the global inverse "abc mass matrix" 
   subroutine init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,velocity_beg,   &
                                 velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: minv_glob_abc
@@ -455,6 +459,7 @@ contains
   end subroutine init_minv_glob_abc
 
 
+  ! Initializes the global Abs matrix
   subroutine init_mabs(mabs,nb_elem,DoF,velocity_beg,velocity_end,dx,dt,time_scheme)
     real,dimension(:,:),intent(out) :: mabs
     integer            ,intent(in)  :: nb_elem
@@ -478,7 +483,8 @@ contains
     end if
   end subroutine init_mabs
 
-    
+
+  ! Initailizes the local stiffness matrix (on one element)
   subroutine init_s_loc(s_loc,DoF,bernstein)
     real,dimension(:,:),intent(out) :: s_loc
     integer            ,intent(in)  :: DoF
@@ -503,7 +509,8 @@ contains
     end if         
   end subroutine init_s_loc
 
-  
+
+  ! Initialize the global stiffness matrix (on all the elements)
   subroutine init_s_glob(s_glob,s_loc,nb_elem)
     real,dimension(:,:),intent(out) :: s_glob
     real,dimension(:,:),intent(in)  :: s_loc
@@ -518,6 +525,7 @@ contains
     end do
   end subroutine init_s_glob
 
+  ! Initalize the Fp and Fv flux matrices (with penalization)
   subroutine init_FpFv(Fp,Fv,DoF,nb_elem,boundaries,alpha,receiver_loc)
     real,dimension(:,:),intent(out) :: Fp
     real,dimension(:,:),intent(out) :: Fv
@@ -563,7 +571,7 @@ contains
     Fv(Dof*(nb_elem-1)+1,Dof*(nb_elem-1)+1)=0.5+alpha_dummy
     Fv(Dof*(nb_elem-1)+1,Dof*(nb_elem-1))=-0.5-alpha_dummy
 
-    if (boundaries.eq.'periodique') then
+    if (boundaries.eq.'periodic') then
        alpha_dummy=alpha
 
        Fp(1,1)=0.5+alpha_dummy
@@ -640,6 +648,7 @@ contains
   end subroutine init_FpFv
 
 
+  ! Initializes the diagonal parameters matrices
   subroutine init_DpDv(Dp,Dv,DoF,nb_elem,velocity,density)
     real,dimension(:,:),intent(out) :: Dp
     real,dimension(:,:),intent(out) :: Dv
@@ -661,6 +670,7 @@ contains
   end subroutine init_DpDv
 
 
+  ! Initializes the time step length dt
   subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme,velocity)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
@@ -680,16 +690,10 @@ contains
     dt=0.0
     
     A=matmul(Ap,Av)
-
-    ! print*,'Ap',minval(Ap),maxval(Ap)
-    ! print*,'Av',minval(Av),maxval(Av)
-    !  print*,'A',minval(A),maxval(A)
-    ! print*,'velocity',minval(velocity),maxval(velocity),size(velocity)
-
+ 
     call Full2Sparse(A,sparse_A)
     call power_method_sparse(sparse_A,max_value,k_max,epsilon)
     dt=alpha/(sqrt(abs(max_value)))
-!    print*,'dt1',dt
     
     call free_sparse_matrix(sparse_A)
     A=matmul(Av,Ap)
@@ -698,9 +702,9 @@ contains
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
     dt=dt*1.0/(maxval(velocity))  !CFL for LF
- !   print*,'dt2',dt
+
     if (time_scheme.eq.'LF4') then
-       dt=0.1*dt
+       dt=1.0*dt
     else if (time_scheme.eq.'RK4') then
        dt=1.4*dt
     else if (time_scheme.eq.'AB3') then
@@ -709,6 +713,7 @@ contains
   end subroutine init_dt
   
 
+  ! Initializes the main operators (if there is no ABC)
   subroutine init_adjoint_operator(problem)
     type(adjoint_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
@@ -800,12 +805,7 @@ contains
        problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
-    
-    ! print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN
-    ! print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x', &
-    !      problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    ! print*,'Ratio                     ::',real(problem%Ap%NNN)/                 &
-    !                                                        problem%Ap%nb_ligne**2
+
     App_full=0.0
     if (problem%time_scheme.eq.'LF') then
        do i=1,size(App_full,1)
@@ -835,12 +835,11 @@ contains
        end if
 
     end if
-
   end subroutine init_adjoint_operator
 
 
-  
-   subroutine init_adjoint_operator_abc(problem)
+  ! Initializes the main operators with ABC
+  subroutine init_adjoint_operator_abc(problem)
     type(adjoint_problem),intent(inout)        :: problem
     real,dimension(problem%nb_elem*problem%DoF,                                 &
                    problem%nb_elem*problem%DoF) :: Ap_full,Av_full,B,App_full,  &
@@ -865,17 +864,6 @@ contains
     call init_FpFv(Fp,Fv,DoF,nb_elem,problem%boundaries,problem%alpha,          &
                    problem%receiver_loc)
     call init_DpDv(Dp,Dv,DoF,nb_elem,problem%velocity,problem%density)
-
-    ! print*,'m_loc',minval(m_loc),maxval(m_loc)
-    ! print*,'m_glob',minval(m_glob),maxval(m_glob)
-    ! print*,'minv_loc',minval(minv_loc),maxval(minv_loc)
-    ! print*,'minv_glob',minval(minv_glob),maxval(minv_glob)
-    ! print*,'s_loc',minval(s_loc),maxval(s_loc)
-    ! print*,'s_glob',minval(s_glob),maxval(s_glob)
-    ! print*,'Fp',minval(Fp),maxval(Fp)
-    ! print*,'Fv',minval(Fv),maxval(Fv)
-    ! print*,'Dp',minval(Dp),maxval(Dp)
-    ! print*,'Dv',minval(Dv),maxval(Dv)
 
     Ap_full=0.0
     Av_full=0.0
@@ -983,12 +971,7 @@ contains
        problem%Minv_p%Values=(problem%dt/problem%dx)*problem%Minv_p%Values
        problem%Minv_v%Values=(problem%dt/problem%dx)*problem%Minv_v%Values
     end if
-    
-    ! print*,'Non-Zero Values of Ap,Av  ::',problem%Ap%NNN,problem%Av%NNN
-    ! print*,'Size of Ap,AV matrices    ::',problem%Ap%nb_ligne,'x',              &
-    !      problem%Ap%nb_ligne,'=',problem%Ap%nb_ligne**2
-    ! print*,'Ratio                     ::',real(problem%Ap%NNN)/problem%Ap%nb_ligne**2
-    
+
     if (problem%strategy.eq.'DTA') then
        call init_sparse_matrix(sparse_dummy,problem%Ap%NNN,problem%Ap%nb_ligne, &
             problem%Ap%IA,problem%Ap%JA,problem%Ap%Values)
@@ -997,20 +980,12 @@ contains
        call free_sparse_matrix(problem%Av)
        call transpose_sparse(sparse_dummy,problem%Av)
        call free_sparse_matrix(sparse_dummy)
-       call init_sparse_matrix(sparse_dummy,problem%App%NNN,problem%App%nb_ligne,&
-            problem%App%IA,problem%App%JA,problem%App%Values)
+       call init_sparse_matrix(sparse_dummy,problem%App%NNN,                    &
+                               problem%App%nb_ligne,problem%App%IA,             &
+                               problem%App%JA,problem%App%Values)
        call free_sparse_matrix(problem%App)
        call transpose_sparse(sparse_dummy,problem%App)
        call free_sparse_matrix(sparse_dummy)
-
-       ! call init_sparse_matrix(sparse_dummy,problem%Minv_p%NNN,                 &
-       !      problem%Minv_p%nb_ligne,problem%Minv_p%IA,problem%Minv_p%JA,        &
-       !      problem%Minv_p%Values)
-       ! call free_sparse_matrix(problem%Minv_p)
-       ! call transpose_sparse(problem%Minv_v,problem%Minv_p)
-       ! call free_sparse_matrix(problem%Minv_v)
-       ! call transpose_sparse(sparse_dummy,problem%Minv_v)
-       ! call free_sparse_matrix(sparse_dummy)
 
        if (problem%scalar_product.eq.'M') then
           problem%App=sparse_matmul(problem%App,problem%M)
@@ -1026,14 +1001,15 @@ contains
   end subroutine init_adjoint_operator_abc
   
   
-  !**************** RESOLUTION DU PROBLEM *************************************
+  !**************** PROBLEM RESOLUTION ******************************************
+  ! Makes one backward time step
   subroutine one_backward_step(problem,t)
     type(adjoint_problem),intent(inout) :: problem
     real,                  intent(in)    :: t
 
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv0,RHSp0
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv1,RHSp1
-    real,dimension(problem%DoF*problem%nb_elem) :: RHSv2,RHSp2
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu0,RHSp0
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu1,RHSp1
+    real,dimension(problem%DoF*problem%nb_elem) :: RHSu2,RHSp2
     real,dimension(problem%DoF*problem%nb_elem) :: U1,U2,U3,U4
     real,dimension(problem%DoF*problem%nb_elem) :: P1,P2,P3,P4
     real                                        :: gd,gg
@@ -1059,10 +1035,10 @@ contains
        call eval_RHS(FP_0,FU_0,problem,t-problem%dt)
 
        call eval_RHS(FP_half,FU_half,problem,t-0.5*problem%dt)
-       problem%RHSv_half=FU_half
+       problem%RHSu_half=FU_half
        problem%RHSp_half=FP_half
        call eval_RHS(FP_1,FU_1,problem,t)
-       problem%RHSv=FU_1
+       problem%RHSu=FU_1
        problem%RHSp=FP_1
 
        if (problem%strategy.eq.'DTA') then
@@ -1076,32 +1052,29 @@ contains
     else if (problem%time_scheme.eq.'AB3') then
 
        RHSp0=0.0
-       RHSv0=0.0
+       RHSu0=0.0
        RHSp1=0.0
-       RHSv1=0.0
+       RHSu1=0.0
        RHSp2=0.0
-       RHSv2=0.0
+       RHSu2=0.0
 
-       
-
-       
        if (problem%strategy.eq.'DTA') then
-          call eval_RHS(problem%RHSp,problem%RHSv,problem,t-problem%dt)
+          call eval_RHS(problem%RHSp,problem%RHSu,problem,t-problem%dt)
           call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
                zero,zero,                                              &
                zero,zero,                                              &
                zero,zero,                                              &
                problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2,        &
-               problem%RHSp,problem%RHSv)
+               problem%RHSp,problem%RHSu)
        else
-          call eval_RHS(problem%RHSp,problem%RHSv,problem,t-problem%dt)
-          call eval_RHS(RHSp0,RHSv0,problem,t-problem%dt)
-          call eval_RHS(RHSp2,RHSv1,problem,t-2*problem%dt)
-          call eval_RHS(RHSp2,RHSv2,problem,t-3*problem%dt)
+          call eval_RHS(problem%RHSp,problem%RHSu,problem,t-problem%dt)
+          call eval_RHS(RHSp0,RHSu0,problem,t-problem%dt)
+          call eval_RHS(RHSp2,RHSu1,problem,t-2*problem%dt)
+          call eval_RHS(RHSp2,RHSu2,problem,t-3*problem%dt)
           call AB3_forward(problem%P,problem%U,problem%Ap,problem%Av,problem%App,  &
-               RHSp0,RHSv0,                                              &
-               RHSp1,RHSv1,                                              &
-               RHSp2,RHSv2,                                              &
+               RHSp0,RHSu0,                                              &
+               RHSp1,RHSu1,                                              &
+               RHSp2,RHSu2,                                              &
                problem%Pk1,problem%Pk2,problem%Uk1,problem%Uk2)
        end if
 
@@ -1109,6 +1082,7 @@ contains
   end subroutine one_backward_step
 
 
+  ! Makes all the backward steps
   subroutine all_backward_step(problem)
     type(adjoint_problem),intent(inout) :: problem
     integer                              :: i
@@ -1120,6 +1094,8 @@ contains
     end do    
   end subroutine all_backward_step
 
+
+  ! Frees the acoustic adjoint problem variables
   subroutine free_adjoint_problem(problem)
     type(adjoint_problem),intent(inout) :: problem
     deallocate(problem%U)
@@ -1130,10 +1106,10 @@ contains
     deallocate(problem%data_U)
     deallocate(problem%P_received)
     deallocate(problem%U_received)
-    deallocate(problem%RHSv)
+    deallocate(problem%RHSu)
     deallocate(problem%RHSp)
     if (problem%time_scheme.eq.'RK4') then
-    deallocate(problem%RHSv_half)
+    deallocate(problem%RHSu_half)
     deallocate(problem%RHSp_half)
     end if
     call free_sparse_matrix(problem%Ap)
@@ -1146,7 +1122,8 @@ contains
   end subroutine free_adjoint_problem
 
 
-  
+
+  ! Evaluates the backward source (here the source are the receiver)
   function eval_backward_source(P_received,data_P,t,final_time)
     real,dimension(:,:),intent(in) :: P_received
     real,dimension(:,:),intent(in) :: data_P
@@ -1158,19 +1135,13 @@ contains
     integer                        :: i
     real                           :: t2
 
-   ! t2=final_time-t
-   t2=t
-    
+    t2=t
     i=1
     do while ((P_received(i,1).le.t2).and.(i.ne.size(data_P,1)))
        i=i+1
     end do
     i=i-1
 
-    ! do i=1,size(P_received,1)
-    !    write(16,*) P_received(i,1),P_received(i,2)
-    ! end do
-    
     if (i.eq.0) then
        print*,'test',i,t,t2,P_received(1,1)
     end if
@@ -1179,7 +1150,6 @@ contains
                         +(P_received(i+1,1)-t2)*P_received(i,2)
     eval_P_received=eval_P_received/(P_received(i+1,1)           &
          -P_received(i,1))
-
 
     i=2
     do while ((data_P(i,1).le.t2).and.(i.ne.size(data_P,1)))
@@ -1198,17 +1168,13 @@ contains
 
 
     eval_backward_source=eval_data_P-eval_P_received
-   ! eval_backward_source=eval_data_P
-
-    ! write(35,*) t,eval_data_P
-    ! write(36,*) t,eval_P_received
-    ! write(37,*) t,eval_backward_source
-     
   end function eval_backward_source
 
-  subroutine eval_RHS(RHSp,RHSv,problem,t)
+
+  ! Evaluates the RHS for the Backward problem at time=t
+  subroutine eval_RHS(RHSp,RHSu,problem,t)
     real,dimension(:)   ,intent(inout) :: RHSp
-    real,dimension(:)   ,intent(inout) :: RHSv
+    real,dimension(:)   ,intent(inout) :: RHSu
     type(adjoint_problem),intent(in)  :: problem
     real                  ,intent(in)  :: t
     
@@ -1216,40 +1182,37 @@ contains
     integer :: last_node
     
     RHSp=0.0
-    RHSv=0.0
+    RHSu=0.0
     f0=2.5
 
     last_node=problem%DoF*problem%nb_elem
 
     if (t.le.0.0) then
        RHSp=0.0
-       RHSv=0.0
+       RHSu=0.0
     else
 
        if (problem%boundaries.eq.'dirichlet') then
           gg=min(0.5*t,0.5)
           gd=-gg
-          RHSv(1)=gg*(-1.0+0.0*problem%alpha)
-          RHSv(last_node)=gd*(1.0-0.0*problem%alpha)
+          RHSu(1)=gg*(-1.0+0.0*problem%alpha)
+          RHSu(last_node)=gd*(1.0-0.0*problem%alpha)
        end if
 
        if (problem%signal.eq.'flat') then
          ! gg=(2*t-1/f0)*exp(-(2.0*PI*(2*t-1/f0)*f0)**2.0)*5/0.341238111
-         ! RHSv((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
+         ! RHSu((problem%source_loc-1)*problem%DoF+1)=gg*(-1.0-0.0*problem%alpha)
           
           gg=eval_backward_source(problem%P_received,problem%data_P,t,problem%final_time)
-         !  RHSv(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
-        RHSp((problem%receiver_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha) 
+          !  RHSu(problem%receiver_loc*problem%DoF+1)=gg*(-1.0-2.0*problem%alpha) 
+          RHSp((problem%receiver_loc-1)*problem%DoF+1)=gg*(1.0-0.0*problem%alpha) 
        end if
     end if
 
-    write(16,*) t,gg
-    
     if (problem%strategy.eq.'ATD') then
        RHSp=sparse_matmul(problem%Minv_p,RHSp)
-       RHSv=sparse_matmul(problem%Minv_v,RHSv)
+       RHSu=sparse_matmul(problem%Minv_v,RHSu)
     end if
 
   end subroutine eval_RHS
-
 end module m_adjoint
