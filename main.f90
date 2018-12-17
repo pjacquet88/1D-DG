@@ -143,7 +143,7 @@ program main
 
      call init_fwi(fwi,nb_iter_fwi,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
           total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
-          receiver_loc,strategy,scalar_product,animation2,adjoint_test)
+          receiver_loc,strategy,scalar_product,animation,adjoint_test)
 
      do i=1,fwi%nb_iter
         print*,'size velocity model',size(fwi%velocity_model)

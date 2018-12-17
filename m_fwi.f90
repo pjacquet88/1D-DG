@@ -56,7 +56,7 @@ module m_fwi
      character(len=20)               :: strategy        ! ATD or DTA
      character(len=20)               :: scalar_product  ! inner prodct (canonical or M)
      logical                         :: adjoint_test    ! logical for adjoint test
-     logical                         :: animation       ! logical for animation
+     character(len=20)               :: animation       ! string for animation
   end type t_fwi
 
   public  :: t_fwi,init_fwi,free_fwi,one_fwi_step,                      &
@@ -90,7 +90,7 @@ contains
     integer            ,intent(in)    :: receiver_loc
     character(len=*)   ,intent(in)    :: strategy
     character(len=*)   ,intent(in)    :: scalar_product
-    logical            ,intent(in)    :: animation
+    character(len=*)   ,intent(in)    :: animation
     logical            ,intent(in)    :: adjoint_test
 
     integer :: i
@@ -246,7 +246,7 @@ contains
        call fwi_extract_g(fwi)
     end if
 
-    if (fwi%animation) then
+    if (fwi%animation.eq.'fwi_forward') then
        do i=0,fwi%n_time_step
           if (modulo(i,10).eq.0) then
 
@@ -323,7 +323,7 @@ contains
        fwi%DU(:,fwi%backward%n_time_step)=0.0
     end if
 
-    if (fwi%animation) then
+    if (fwi%animation.eq.'fwi_backward') then
        do i=0,fwi%n_time_step
           if (modulo(i,10).eq.0) then
              call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,    &
