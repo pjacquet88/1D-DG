@@ -122,4 +122,38 @@ contains
     end if
 end subroutine gif_creation
 
+
+subroutine progress_bar(iter,max_iter)
+  implicit none
+  integer,intent(in) :: iter
+  integer,intent(in) :: max_iter
+
+  integer,parameter :: nb_char=50
+
+  integer :: fraction,pourcentage,i
+  character,dimension(54) :: table
+
+  fraction=floor(real(iter*nb_char/max_iter))
+  pourcentage=floor(iter*100.0/max_iter)
+
+  table(1)='['
+  do i=2,fraction+1
+     table(i)='#'
+  end do
+  do i=fraction+2,nb_char+1
+     table(i)=' '
+  end do
+  table(52)=']'
+  table(53)='-'
+  table(54)='['
+  !  write(*,'(1a1,a,$)') char(13), table
+  
+!  write(*,'(1a1,(10a,a,a,54a,i0,a),$)')  char(13),'Iteration ','/',' ',table,pourcentage,']'
+  write(*,'(1a1,(a,i0,a,i0,a,54a,i0,a),$)')  char(13),'Iteration ',iter,'/',max_iter,' ',table,pourcentage,'%]'
+
+  if (iter.eq.max_iter) then
+     write(*,*)
+  end if
+end subroutine progress_bar
+
 end module m_animation

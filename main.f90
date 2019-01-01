@@ -44,10 +44,6 @@ program main
   call create_B2L
   call create_L2B
   call create_derive(order)
-
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%% DATA CREATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-  print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
@@ -85,33 +81,37 @@ program main
   call free_acoustic_problem(forward)
  
   if (bool_fwi) then
-     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-     print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-     print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
+     print*,' '
+     print*,'FWI in progress...'
+     print*,' '
+     
      call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
                    nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
                    bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
                    animation,adjoint_test)
 
      do i=1,fwi%nb_iter
-        print*,'size velocity model',size(fwi%velocity_model)
         fwi%current_iter=i
-        print*,'Iteration n°',fwi%current_iter,'/',fwi%nb_iter
+        !write(*,'(1a1,(a,i0),$)') char(13), 'iteration',fwi%current_iter
+        ! print*,'Iteration n°',fwi%current_iter,'/',fwi%nb_iter
+       call progress_bar(i,fwi%nb_iter)
         call one_fwi_step(fwi)
      end do
      call free_fwi(fwi)
   end if
-
+     print*,' '
+     print*,'... FWI finished'
+     print*,' '
   
   !--------------------- Animation ----------------------------------------------
-  call gif_creation(animation,nb_iter_fwi,data_time_step)
+     call gif_creation(animation,nb_iter_fwi,data_time_step)
+     
   !------------------------ Free Variables --------------------------------------
-
-  call free_basis_b
-  call free_basis_l
-  call free_B2L
-  call free_L2B
-  call free_derive
+     call free_basis_b
+     call free_basis_l
+     call free_B2L
+     call free_L2B
+     call free_derive
   
 end program main

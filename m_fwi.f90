@@ -179,7 +179,6 @@ contains
          fwi%receiver_loc)
 
     fwi%n_time_step=fwi%forward%n_time_step
-    print*,'There is : ',fwi%n_time_step,'time steps'
     fwi%dt=fwi%forward%dt
     fwi%dx=fwi%forward%dx
     call Sparse2Full(fwi%forward%M,fwi%M)
@@ -367,7 +366,6 @@ contains
     end if
     call update_model(fwi)
 
-    print*,'%%%% COST FUNCTION %%%%%'
     call cost_function(fwi%P_received,fwi%data_P,fwi%final_time,fwi%current_iter)
     deallocate(fwi%P)
     deallocate(fwi%U)
@@ -817,10 +815,9 @@ contains
 
     CF=CF*dt
     CF=0.5*CF
-
-    print*,'CF=',CF
+    
     write(33,*) iter,CF
-
+    
     if (CF.eq.0.0) then
        print*,'The gradient is null, end of the FWI algorithm'
        STOP

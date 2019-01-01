@@ -212,6 +212,8 @@ contains
     print*,''//achar(27)//'[92mdensity_ini        ='//achar(27)//'[0m',density_ini
     print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
     print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
+    print*,''
+    print*,''
   end subroutine print_selected_parameters
 
 end module m_init_application
