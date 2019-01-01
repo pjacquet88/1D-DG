@@ -6,7 +6,7 @@ enable_language(Fortran)
 #add_subdirectory(lib)
 
 # add the executable
-set(FWI_SOURCES main.f90 src/m_acoustic.f90 src/m_animation.f90 src/m_init_application.f90 src/m_powermethod.f90 src/m_adjoint.f90 src/m_file_function.f90 src/m_matrix.f90 src/m_time_scheme.f90 src/m_adjoint_test.f90 src/m_fwi.f90 src/m_polynom.f90)
+set(FWI_SOURCES applications/fwi.f90 src/m_acoustic.f90 src/m_animation.f90 src/m_init_application.f90 src/m_powermethod.f90 src/m_adjoint.f90 src/m_file_function.f90 src/m_matrix.f90 src/m_time_scheme.f90 src/m_adjoint_test.f90 src/m_fwi.f90 src/m_polynom.f90)
 
 
 add_executable(FWI ${FWI_SOURCES})
