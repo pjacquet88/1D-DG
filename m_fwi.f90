@@ -49,8 +49,6 @@ module m_fwi
      logical                         :: bernstein       ! logical if T -> Bernstein
      character(len=20)               :: signal          ! initial perturbation (take flat)
      character(len=20)               :: boundaries      ! boundary condition
-     integer                         :: k_max           ! nb iter max for power method algo
-     real                            :: epsilon         ! precision for power method algo
      integer                         :: source_loc      ! source location (at the beginning of an element)
      integer                         :: receiver_loc    ! receiver location (at the beginnig of an element)
      character(len=20)               :: strategy        ! ATD or DTA
@@ -69,7 +67,7 @@ contains
   ! Initializes the fwi type
   subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data_P,data_U,   &
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
-                      bernstein,k_max,epsilon,source_loc,receiver_loc,strategy, &
+                      bernstein,source_loc,receiver_loc,strategy, &
                       scalar_product,animation,adjoint_test)
     type(t_fwi)        ,intent(inout) :: fwi
     integer            ,intent(in)    :: nb_iter
@@ -84,8 +82,6 @@ contains
     real               ,intent(in)    :: final_time
     real               ,intent(in)    :: alpha
     logical            ,intent(in)    :: bernstein
-    integer            ,intent(in)    :: k_max
-    real               ,intent(in)    :: epsilon
     integer            ,intent(in)    :: source_loc
     integer            ,intent(in)    :: receiver_loc
     character(len=*)   ,intent(in)    :: strategy
@@ -134,8 +130,6 @@ contains
     fwi%final_time=final_time
     fwi%alpha=alpha
     fwi%bernstein=bernstein
-    fwi%k_max=k_max
-    fwi%epsilon=epsilon
     fwi%source_loc=source_loc
     fwi%receiver_loc=receiver_loc
     fwi%strategy=strategy
@@ -181,8 +175,8 @@ contains
 
     call init_acoustic_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
-         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
-         fwi%epsilon,fwi%source_loc,fwi%receiver_loc)
+         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%source_loc,      &
+         fwi%receiver_loc)
 
     fwi%n_time_step=fwi%forward%n_time_step
     print*,'There is : ',fwi%n_time_step,'time steps'
@@ -274,9 +268,9 @@ contains
 
     call init_adjoint_problem(fwi%backward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
-         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%k_max,           &
-         fwi%epsilon,fwi%source_loc,fwi%receiver_loc,fwi%data_P,fwi%data_U,     &
-         fwi%P_received,fwi%U_received,fwi%strategy,fwi%scalar_product)
+         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%source_loc,      &
+         fwi%receiver_loc,fwi%data_P,fwi%data_U,fwi%P_received,fwi%U_received,  &
+         fwi%strategy,fwi%scalar_product)
 
     if (fwi%forward%n_time_step.ne.fwi%backward%n_time_step) then
        print*,'ERROR n_time_step'

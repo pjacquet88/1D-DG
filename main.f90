@@ -11,15 +11,12 @@ program main
   implicit none
 
   !**************** Animation and Outputs ***************************************
-  logical,parameter           :: animation2=.false.
-  logical,parameter           :: bool_fwi=.true.          ! if F -> just perform forward for data
+  logical,parameter           :: bool_fwi=.true.  ! if F -> just perform forward for data
   !******************************************************************************
-
 
   !*************** Main Variables ***********************************************
   type(acoustic_problem)            :: forward,backward
   type(t_fwi)                       :: fwi
-  real,dimension(:),allocatable     :: P,B,Im,Im_lap   ! vector for Imaging Condition
   real,dimension(:,:),allocatable   :: data_P
   real,dimension(:,:),allocatable   :: data_U
 
@@ -27,7 +24,6 @@ program main
   integer                           :: i,j
   integer                           :: values(1:8), k
   integer,dimension(:), allocatable :: seed
-  real                              :: t0,t1,t2,t3
   logical                           :: file_exists
   integer                           :: data_time_step
   integer                           :: fwi_time_step
@@ -55,8 +51,7 @@ program main
   
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
-                             bernstein,signal,boundaries,k_max,epsilon,         &
-                             source_loc,receiver_loc)
+                             bernstein,signal,boundaries,source_loc,receiver_loc)
 
   data_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))
@@ -89,9 +84,6 @@ program main
   
   call free_acoustic_problem(forward)
  
-  call cpu_time(t0)
-  
-
   if (bool_fwi) then
      print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
      print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
@@ -99,8 +91,8 @@ program main
 
      call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
                    nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
-                   bernstein,k_max,epsilon,source_loc,receiver_loc,strategy,    &
-                   scalar_product,animation,adjoint_test)
+                   bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
+                   animation,adjoint_test)
 
      do i=1,fwi%nb_iter
         print*,'size velocity model',size(fwi%velocity_model)

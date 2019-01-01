@@ -25,8 +25,6 @@ module m_adjoint
      real,dimension(:),allocatable   :: Uk1,Uk2      ! AB3 vectors
      character(len=20)               :: boundaries   ! string for BC
      character(len=20)               :: signal       ! string to initialize U,P
-     integer                         :: k_max        ! iter max for power method
-     real                            :: epsilon      ! precision for power method algo.
      !----------- MATRICES ---------------------------
      type(sparse_matrix)             :: Ap,App       
      type(sparse_matrix)             :: Av
@@ -163,10 +161,9 @@ contains
   ! Initializes the adjoint acoustic problem
   subroutine init_adjoint_problem(problem,nb_elem,DoF,time_scheme,velocity,     &
                                   density,total_length,final_time,              &
-                                  alpha,bernstein,signal,boundaries,k_max,      &
-                                  epsilon,source_loc,receiver_loc, data_P,      &
-                                  data_U,P_received,U_received,strategy,        &
-                                  scalar_product)
+                                  alpha,bernstein,signal,boundaries,source_loc, &
+                                  receiver_loc, data_P,data_U,P_received,       &
+                                  U_received,strategy,scalar_product)
     
     type(adjoint_problem) ,intent(out) :: problem
     integer               ,intent(in)  :: nb_elem
@@ -180,8 +177,6 @@ contains
     logical               ,intent(in)  :: bernstein
     character(len=*)      ,intent(in)  :: signal
     character(len=*)      ,intent(in)  :: boundaries
-    integer               ,intent(in)  :: k_max
-    real                  ,intent(in)  :: epsilon
     integer               ,intent(in)  :: source_loc
     integer               ,intent(in)  :: receiver_loc
     real,dimension(:,:)   ,intent(in)  :: data_P
@@ -204,8 +199,6 @@ contains
     problem%alpha=alpha
     problem%bernstein=bernstein
     problem%boundaries=boundaries
-    problem%k_max=k_max
-    problem%epsilon=epsilon
     problem%signal=signal
     problem%receiver_loc=receiver_loc
     problem%source_loc=source_loc
@@ -270,28 +263,7 @@ contains
     problem%n_time_step=int(problem%final_time/problem%dt)+1
     problem%final_time=problem%dt*problem%n_time_step
     ! here I change the final time to fit frames of the forward and the backward
-
-    ! print*,'Ap Av done'
-    ! call init_UP(problem)
-    ! print*,'nb_elem              ::',nb_elem
-    ! print*,'DoF                  ::',DoF
-    ! print*,'total_length         ::',total_length
-    ! print*,'final_time           ::',problem%final_time
-    ! print*,'dx                   ::',problem%dx
-    ! print*,'dt                   ::',problem%dt
-    ! print*,'n_time_step          ::',problem%n_time_step
-    ! print*,'Boundary Condition   ::','   ',boundaries
-    ! print*,'Time scheme          ::' ,'   ',time_scheme
-    ! print*,'Penalisation alpha   ::',alpha
-    ! print*,'Max Iter Power-Method::',k_max
-    ! print*,'Epsilon Power-Method ::',epsilon
-    ! print*,' '
-    ! if (bernstein) then
-    !    print*,'The problem is solved with Bernstein elements'
-    ! else
-    !    print*,'The problem is solved with Lagrange elements'
-    ! end if
-    ! print*,'------------------------------------------------------------'    
+    
     allocate(problem%data_P(size(data_P,1),size(data_P,2)))
     problem%data_P=data_P
     allocate(problem%data_U(size(data_U,1),size(data_U,2)))
@@ -671,12 +643,10 @@ contains
 
 
   ! Initializes the time step length dt
-  subroutine init_dt(Ap,Av,dt,k_max,epsilon,nb_elem,time_scheme,velocity)
+  subroutine init_dt(Ap,Av,dt,nb_elem,time_scheme,velocity)
     real,dimension(:,:),intent(in)  :: Ap
     real,dimension(:,:),intent(in)  :: Av
     real               ,intent(out) :: dt
-    integer            ,intent(in)  :: k_max
-    real               ,intent(in)  :: epsilon
     integer            ,intent(in)  :: nb_elem
     character(len=*)   ,intent(in)  :: time_scheme
     real,dimension(:)  ,intent(in)  :: velocity
@@ -692,13 +662,13 @@ contains
     A=matmul(Ap,Av)
  
     call Full2Sparse(A,sparse_A)
-    call power_method_sparse(sparse_A,max_value,k_max,epsilon)
+    call power_method_sparse(sparse_A,max_value)
     dt=alpha/(sqrt(abs(max_value)))
     
     call free_sparse_matrix(sparse_A)
     A=matmul(Av,Ap)
     call Full2Sparse(matmul(Av,Ap),sparse_A)
-    call power_method_sparse(sparse_A,max_value,k_max,epsilon)
+    call power_method_sparse(sparse_A,max_value)
     dt=min(dt,alpha/(sqrt(abs(max_value))))
     call free_sparse_matrix(sparse_A)
     dt=dt*1.0/(maxval(velocity))  !CFL for LF
@@ -753,8 +723,7 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                    problem%k_max,problem%epsilon,problem%nb_elem,              &
-                    problem%time_scheme,problem%velocity)
+                    problem%nb_elem,problem%time_scheme,problem%velocity)
 
        if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
@@ -784,8 +753,7 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Ap_full,(1/problem%dx)*Av_full,problem%dt,   &
-                     problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_scheme,problem%velocity)
+                     problem%nb_elem,problem%time_scheme,problem%velocity)
 
        if (problem%time_scheme.eq.'LF4') then
           B=matmul(Ap_full,Av_full)
@@ -879,8 +847,7 @@ contains
 
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
-                    problem%k_max,problem%epsilon,problem%nb_elem,              &
-                    problem%time_scheme,problem%velocity)
+                    problem%nb_elem,problem%time_scheme,problem%velocity)
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &
                                problem%velocity(1),problem%velocity(nb_elem),   &
@@ -929,8 +896,7 @@ contains
        Av_full=matmul(Dv,Av_full)
 
        call init_dt((1/problem%dx)*Av_full,(1/problem%dx)*Av_full,problem%dt,   &
-                     problem%k_max,problem%epsilon,problem%nb_elem,             &
-                     problem%time_scheme,problem%velocity)
+                     problem%nb_elem,problem%time_scheme,problem%velocity)
 
 
        call init_minv_glob_abc(minv_glob_abc,m_loc,nb_elem,DoF,                 &

@@ -6,22 +6,23 @@ module m_powermethod
   implicit none
 
   public  :: power_method,power_method_sparse
-  private :: norm 
+  private :: norm
 
 contains
 
   !*************** PUBLIC *******************************************************
-  
+
   ! Power method employed on a full matrix
-  subroutine power_method(A,max_value,k_max,epsilon)
+  subroutine power_method(A,max_value)
     real,dimension(:,:),intent(in)  :: A
     real               ,intent(out) :: max_value
-    integer            ,intent(in)  :: k_max
-    real               ,intent(in)  :: epsilon
     real,dimension(:),allocatable   :: z,q1,q2
     real                            :: r
     integer                         :: k
     integer :: i
+
+    integer,parameter :: k_max=1000
+    real   ,parameter :: epsilon=1e-5
 
     r=1.0
     k=1
@@ -47,14 +48,16 @@ contains
 
 
   ! Power method employed on asparse matrix
-  subroutine power_method_sparse(A,max_value,k_max,epsilon)
+  subroutine power_method_sparse(A,max_value)
     type(sparse_matrix),intent(in)  :: A
     real               ,intent(out) :: max_value
-    integer            ,intent(in)  :: k_max
-    real               ,intent(in)  :: epsilon
     real,dimension(:),allocatable   :: z,q1,q2
     real                            :: r
     integer                         :: k
+
+    integer,parameter :: k_max=1000
+    real   ,parameter :: epsilon=1e-5
+
     r=1.0
     k=1
 
@@ -74,7 +77,6 @@ contains
 
 
  !********** PRIVATE ************************************************************
- 
  ! Calculate the norm of a vector
  function norm(v)
     real,dimension(:),intent(in) :: v
