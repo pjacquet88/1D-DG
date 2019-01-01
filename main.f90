@@ -6,37 +6,12 @@ program main
   use m_adjoint
   use m_adjoint_test
   use m_fwi
+  use m_init_application
 
   implicit none
 
-  !*************** Problem Parameters *******************************************
-  integer         ,parameter :: nb_elem=100          ! Nb of elements (all same length)
-  integer         ,parameter :: ordre=2,DoF=ordre+1  ! Polynoms order
-  real            ,parameter :: total_length=1.0     ! domain length
-  real            ,parameter :: final_time=3.0       ! final time
-  character(len=*),parameter :: time_scheme='RK4'    ! change the time scheme
-  real            ,parameter :: alpha=1.0            ! Penalisation value
-  character(len=*),parameter :: signal='flat'        ! initial values (flat = 0)
-  character(len=*),parameter :: boundaries='ABC'     ! Boundary Conditions
-  logical         ,parameter :: bernstein=.true.     ! If F-> Lagrange Elements
-  integer         ,parameter :: k_max=1e3            ! iterr max for power method algo.
-  real            ,parameter :: epsilon=1e-5         ! precision for power method algo.
-  integer         ,parameter :: source_loc=1         ! location of the source (elemts)
-  integer         ,parameter :: receiver_loc=30      ! location of the receiver(elemts)
-
-  character(len=*),parameter :: strategy='DTA'
-  logical         ,parameter :: adjoint_test=.false.
-  character(len=*),parameter :: scalar_product='canonical'
-  integer         ,parameter :: nb_iter_fwi=50
-  
-  real,dimension(nb_elem)    :: velocity ! velocity model change the size to change the model 
-  real,dimension(1)          :: density  ! density model change the size to change the model
-  !******************************************************************************
-  
-
   !**************** Animation and Outputs ***************************************
   logical,parameter           :: animation2=.false.
-  character(len=*),parameter  :: animation='model_update' ! no,data_forward,fwi_forward,fwi_backward,model_updates
   logical,parameter           :: bool_fwi=.true.          ! if F -> just perform forward for data
   !******************************************************************************
 
@@ -59,6 +34,8 @@ program main
   integer                           :: n_frame
   !******************************************************************************
 
+  call setup_parameters()
+  
   call date_and_time(values=values)
   call random_seed(size=k)
   allocate(seed(1:k))
@@ -66,41 +43,20 @@ program main
   call random_seed(put=seed)
   
   !*********** Polynomial initialization *************
-  call init_basis_b(ordre)
-  call init_basis_l(ordre)
+  call init_basis_b(order)
+  call init_basis_l(order)
   call create_B2L
   call create_L2B
-  call create_derive(ordre)
-
-
-  !********** Data model initialization *************
-  do i=1,33
-     velocity(i)=1.0
-  end do
-  do i=34,66
-     velocity(i)=1.2
-  end do
-  
-  do i=67,100
-     velocity(i)=1.2
-  end do
-
-  ! do i=76,100
-  !    velocity(i)=1.0
-  ! end do
-    
-  do i=1,size(density)
-     density(i)=1
-  end do
-
+  call create_derive(order)
 
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%% DATA CREATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
   
-  call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity,density,           &
-                    total_length,final_time,alpha,bernstein,signal,boundaries,           &
-                    k_max,epsilon,source_loc,receiver_loc)
+  call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
+                             density_data,total_length,final_time,alpha,        &
+                             bernstein,signal,boundaries,k_max,epsilon,         &
+                             source_loc,receiver_loc)
 
   data_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))
@@ -141,9 +97,10 @@ program main
      print*,'%%%%%%%%%%%%%%%%%%%%% FWI %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
      print*,'%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
-     call init_fwi(fwi,nb_iter_fwi,velocity,density,data_P,data_U,nb_elem,DoF,time_scheme,   &
-          total_length,final_time,alpha,bernstein,k_max,epsilon,source_loc,        &
-          receiver_loc,strategy,scalar_product,animation,adjoint_test)
+     call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
+                   nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
+                   bernstein,k_max,epsilon,source_loc,receiver_loc,strategy,    &
+                   scalar_product,animation,adjoint_test)
 
      do i=1,fwi%nb_iter
         print*,'size velocity model',size(fwi%velocity_model)
