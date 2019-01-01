@@ -12,3 +12,8 @@ run
 Bicouche*
 Results*
 TAGS
+build/CMakeCache.txt
+build/CMakeFiles/
+build/FWI
+build/Makefile
+build/cmake_install.cmake
