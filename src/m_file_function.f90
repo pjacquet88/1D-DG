@@ -77,7 +77,8 @@ contains
     ddx=dx/(DoF-1)
     x=0.0
     
-    write(F_NAME,"(A,A,I0,'.dat')") "Files/",name,N
+    write(F_NAME,"(A,A,I0,'.dat')") "../Files/",name,N
+    print*,'TEST F_NAME',F_NAME
     open(unit=2, file=F_NAME, action="write")
     if (bernstein) then
        do i=1,nb_elem-1

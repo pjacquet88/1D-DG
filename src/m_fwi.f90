@@ -140,7 +140,7 @@ contains
     fwi%signal='flat'
     fwi%boundaries='ABC'
 
-    write(fichier,"(A,A,I0,'.dat')") "../Bernstein/Files/",'VP',0
+    write(fichier,"(A,A,I0,'.dat')") "../Files/",'VP',0
     open(unit=28,file=fichier)
     do i=1,fwi%nb_elem
        write(28,*) i,fwi%velocity_model(i)
@@ -746,7 +746,7 @@ contains
        end do
     end do
 
-    write(fichier,"(A,A,I0,'.dat')") "../Bernstein/Files/",'VP',fwi%current_iter
+    write(fichier,"(A,A,I0,'.dat')") "../Files/",'VP',fwi%current_iter
     open(unit=28,file=fichier)
     do i=1,fwi%nb_elem
        write(28,*) i,fwi%velocity_model(i)
