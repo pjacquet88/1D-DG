@@ -8,7 +8,7 @@ program main
   use m_fwi
   use m_init_application
   use m_animation
-  
+
   implicit none
 
   !**************** Animation and Outputs ***************************************
@@ -103,15 +103,15 @@ program main
      print*,' '
      print*,'... FWI finished'
      print*,' '
-  
+
   !--------------------- Animation ----------------------------------------------
      call gif_creation(animation,nb_iter_fwi,data_time_step)
-     
+
   !------------------------ Free Variables --------------------------------------
      call free_basis_b
      call free_basis_l
      call free_B2L
      call free_L2B
      call free_derive
-  
+
 end program main
