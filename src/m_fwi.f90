@@ -65,14 +65,14 @@ module m_fwi
 contains
 
   ! Initializes the fwi type
-  subroutine init_fwi(fwi,nb_iter,velocity_model,density_model,data_P,data_U,   &
+  subroutine init_fwi(fwi,nb_iter,velocity_ini,density_ini,data_P,data_U,       &
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
-                      bernstein,source_loc,receiver_loc,strategy, &
+                      bernstein,source_loc,receiver_loc,strategy,               &
                       scalar_product,animation,adjoint_test)
     type(t_fwi)        ,intent(inout) :: fwi
     integer            ,intent(in)    :: nb_iter
-    real,dimension(:)  ,intent(in)    :: velocity_model
-    real,dimension(:)  ,intent(in)    :: density_model
+    real,dimension(:)  ,intent(in)    :: velocity_ini
+    real,dimension(:)  ,intent(in)    :: density_ini
     real,dimension(:,:),intent(in)    :: data_P
     real,dimension(:,:),intent(in)    :: data_U
     integer            ,intent(in)    :: nb_elem
@@ -89,33 +89,35 @@ contains
     character(len=*)   ,intent(in)    :: animation
     logical            ,intent(in)    :: adjoint_test
 
-    integer :: i
+    integer :: i,j,dv,dp
     real    :: epsilon_vp
     character(len=50) :: fichier
     fwi%nb_iter=nb_iter
+
     allocate(fwi%velocity_model(nb_elem))
     allocate(fwi%density_model(nb_elem))
-
-    epsilon_vp=10.0d0**(-5)
-
-    do i=1,33
-       fwi%velocity_model(i)=1.0!+epsilon_vp
-       fwi%density_model(i)=1.0!+10**(-5)
-    end do
-
-
-    do i=34,66
-       fwi%velocity_model(i)=1.0!epsilon_vp
-       fwi%density_model(i)=1.0!+10**(-5)
-    end do
-
-    do i=67,nb_elem
-       fwi%velocity_model(i)=1.0!+epsilon_vp
-       fwi%density_model(i)=1.0!+10**(-5)
-    end do
-
     allocate(fwi%gradient_rho(nb_elem))
     allocate(fwi%gradient_vp(nb_elem))
+
+    dv=max(nb_elem/size(velocity_ini),1)
+    do i=1,size(velocity_ini)
+       do j=(i-1)*dv+1,i*dv
+          fwi%velocity_model(j)=velocity_ini(i)
+       end do
+    end do
+    do j=size(velocity_ini)*dv+1,nb_elem
+       fwi%velocity_model(j)=velocity_ini(size(velocity_ini))
+    end do
+
+    dp=max(nb_elem/size(density_ini),1)
+    do i=1,size(density_ini)
+       do j=(i-1)*dp+1,i*dp
+          fwi%density_model(j)=density_ini(i)
+       end do
+    end do
+    do j=size(density_ini)*dp+1,nb_elem
+       fwi%density_model(j)=density_ini(size(density_ini))
+    end do
 
     allocate(fwi%data_P(0:size(data_P,1)-1,size(data_U,2)))
     allocate(fwi%data_U(0:size(data_U,1)-1,size(data_U,2)))
@@ -217,10 +219,13 @@ contains
        fwi%P(:,current_time_step)=fwi%forward%P
        fwi%U(:,current_time_step)=fwi%forward%U
        fwi%P_received(current_time_step,1)=t
-       fwi%P_received(current_time_step,2)=fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+1)
+       fwi%P_received(current_time_step,2)=                                     &
+                                    fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+1)
+
        fwi%U_received(current_time_step,1)=t
-       fwi%U_received(current_time_step,2)=fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+1)
-       
+       fwi%U_received(current_time_step,2)=                                     &
+                                    fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+1)
+
        if (fwi%adjoint_test) then
           fwi%FP(:,current_time_step)=fwi%forward%RHSp
           fwi%FU(:,current_time_step)=fwi%forward%RHSu
@@ -284,7 +289,7 @@ contains
        allocate(fwi%DP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
        allocate(fwi%DU(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
     end if
-    
+
     fwi%QP(:,fwi%n_time_step)=0
     fwi%QU(:,fwi%n_time_step)=0
 
@@ -327,7 +332,7 @@ contains
           end if
        end do
     end  if
-    
+
     if (fwi%adjoint_test) then
        print*,'%%%%%%% ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
        print*,'Inner Product PU/DPDU',inner_product(fwi%P,fwi%U,fwi%DP,fwi%DU)
@@ -356,9 +361,9 @@ contains
                                                        test%M)
        print*,'%%%%%% END ADJOINT TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     end if
-    
+
     call free_adjoint_problem(fwi%backward)
-    
+
     if (fwi%strategy.eq.'ATD') then
        call gradient_ATD_computation(fwi)
     else if (fwi%strategy.eq.'DTA') then
@@ -815,9 +820,9 @@ contains
 
     CF=CF*dt
     CF=0.5*CF
-    
+
     write(33,*) iter,CF
-    
+
     if (CF.eq.0.0) then
        print*,'The gradient is null, end of the FWI algorithm'
        STOP

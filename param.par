@@ -45,11 +45,11 @@ false
 #45 size_velocity_data #Velocity used for data's or for direct simulation only
 3
 #47 velocity_data
-1,1.2,1.2
+1.0,1.2,1.2
 #49 size_velocity_ini  #First velocity model initializing the FWI process
 3
 #51 velocity_ini
-1,1.2,1.2
+1.0,1.0,1.0
 #53 ############# DENSITY MODEL ################################################
 #54 size_density_data #Density used for data's or for direct simulation only
 1

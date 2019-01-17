@@ -31,20 +31,20 @@ program main
   !******************************************************************************
 
   call setup_parameters()
-  
+
   call date_and_time(values=values)
   call random_seed(size=k)
   allocate(seed(1:k))
   seed(:) = values(8)
   call random_seed(put=seed)
-  
+
   !*********** Polynomial initialization *************
   call init_basis_b(order)
   call init_basis_l(order)
   call create_B2L
   call create_L2B
   call create_derive(order)
-  
+
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
                              bernstein,signal,boundaries,source_loc,receiver_loc)
@@ -52,7 +52,7 @@ program main
   data_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))
   allocate(data_U(0:forward%n_time_step,2))
-  
+
   t=0
   data_P(0,1)=0.0
   data_P(0,2)=0.0
@@ -77,15 +77,17 @@ program main
      write(22,*) data_P(i,1),data_P(i,2)
   end do
   close(22)
-  
+
   call free_acoustic_problem(forward)
- 
+
   if (bool_fwi) then
 
      print*,' '
      print*,'FWI in progress...'
      print*,' '
-     
+
+     print*,'test velocity ini',size(velocity_ini), velocity_ini
+
      call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
                    nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
                    bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
