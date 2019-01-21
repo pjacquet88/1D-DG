@@ -63,3 +63,17 @@ add_test(Forward_without_param ${CMAKE_BINARY_DIR}/FORWARD)
 
 # TEST3 : FWI_without_param
 add_test(FWI_without_param_word ${CMAKE_BINARY_DIR}/FWI)
+
+
+
+
+#------------------ CUSTOM TARGETS --------------------
+add_custom_target(data_clean
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/Files/*.dat
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/fort.*
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.gif
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.dat)
+
+add_custom_target(cleanall
+  COMMAND make clean
+  COMMAND make data_clean)
