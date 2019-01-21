@@ -3,31 +3,25 @@ program main
   use m_polynom
   use m_matrix
   use m_acoustic
-  use m_adjoint
-  use m_adjoint_test
-  use m_fwi
   use m_init_application
   use m_animation
 
   implicit none
 
   !*************** Main Variables ***********************************************
-  type(acoustic_problem)            :: forward,backward
-  type(t_fwi)                       :: fwi
+  type(acoustic_problem)            :: forward
+
+  real                              :: t
+  integer                           :: i,j,k
+  integer                           :: forward_n_time_step
   real,dimension(:,:),allocatable   :: data_P
   real,dimension(:,:),allocatable   :: data_U
 
-  real                              :: t
-  integer                           :: i,j
-
-  integer                           :: data_time_step
-  integer                           :: fwi_time_step
-
-  integer                           :: values(1:8), k
+  integer                           :: values(1:8)
   integer,dimension(:), allocatable :: seed
   !******************************************************************************
 
-  call setup_parameters('fwi')
+  call setup_parameters('forward')
 
   call date_and_time(values=values)
   call random_seed(size=k)
@@ -42,11 +36,12 @@ program main
   call create_L2B
   call create_derive(order)
 
+
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
                              bernstein,signal,boundaries,source_loc,receiver_loc)
 
-  data_time_step=forward%n_time_step
+  forward_n_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))
   allocate(data_U(0:forward%n_time_step,2))
 
@@ -58,6 +53,7 @@ program main
   end if
   do i=1,forward%n_time_step
      t=i*forward%dt
+     call progress_bar(i,forward%n_time_step)
      call one_forward_step(forward,t)
      data_P(i,1)=t
      data_P(i,2)=forward%P((receiver_loc-1)*DoF+1)
@@ -77,36 +73,14 @@ program main
 
   call free_acoustic_problem(forward)
 
-     print*,' '
-     print*,'FWI in progress...'
-     print*,' '
-
-     print*,'test velocity ini',size(velocity_ini), velocity_ini
-
-     call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
-                   nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
-                   bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
-                   animation,adjoint_test)
-
-     do i=1,fwi%nb_iter
-        fwi%current_iter=i
-       call progress_bar(i,fwi%nb_iter)
-       call one_fwi_step(fwi)
-     end do
-     call free_fwi(fwi)
-
-     print*,' '
-     print*,'... FWI finished'
-     print*,' '
-
   !--------------------- Animation ----------------------------------------------
-     call gif_creation(animation,nb_iter_fwi,data_time_step)
+  call gif_creation(animation,forward_n_time_step,forward_n_time_step)
 
   !------------------------ Free Variables --------------------------------------
-     call free_basis_b
-     call free_basis_l
-     call free_B2L
-     call free_L2B
-     call free_derive
+  call free_basis_b
+  call free_basis_l
+  call free_B2L
+  call free_L2B
+  call free_derive
 
 end program main

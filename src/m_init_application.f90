@@ -2,7 +2,7 @@ module m_init_application
 
   implicit none
 
-    !*************** Problem Parameters *******************************************
+  !*************** Problem Parameters *******************************************
   integer           :: nb_elem        ! Nb of elements (all same length)
   integer           :: order,DoF      ! Polynoms order
   real              :: total_length   ! domain length
@@ -16,23 +16,29 @@ module m_init_application
   real              :: epsilon        ! precision for power method algo.
   integer           :: source_loc     ! location of the source (elemts)
   integer           :: receiver_loc   ! location of the receiver(elemts)
-  character(len=20) :: strategy
-  logical           :: adjoint_test
-  character(len=20) :: scalar_product
-  integer           :: nb_iter_fwi
+  character(len=20) :: strategy       ! 'ATD' or 'DTA'
+  logical           :: adjoint_test   ! Booleen to exectute the adjoint test
+  character(len=20) :: scalar_product ! scalar product that define bwd operator
+  integer           :: nb_iter_fwi    ! nb iteration of the fwi algorithm
 
-  real,dimension(:),allocatable :: velocity_data,velocity_ini
-  real,dimension(:),allocatable :: density_data,density_ini
-  integer                       :: size_velocity_data,size_velocity_ini
-  integer                       :: size_density_data,size_density_ini
+  real,dimension(:),allocatable :: velocity_data      ! velocity model for data
+  real,dimension(:),allocatable :: velocity_ini       ! velocity model to ini fwi
+  real,dimension(:),allocatable :: density_data       ! density model for data
+  real,dimension(:),allocatable :: density_ini        ! dentsity model to ini fwi
+  integer                       :: size_velocity_data ! size of velocity_data
+  integer                       :: size_velocity_ini  ! size of velocity_ini
+  integer                       :: size_density_data  ! size of density_data
+  integer                       :: size_density_ini   ! size of density_ini
 
   character(len=20) :: animation
 
 
 contains
 
-  subroutine setup_parameters()
+  subroutine setup_parameters(application)
     implicit none
+    character(len=*),intent(in) :: application
+
     integer           :: n_arg
     character(len=20) :: param_file_name
     n_arg=command_argument_count()
@@ -40,13 +46,13 @@ contains
     if (n_arg.lt.1) then
        print*,''//achar(27)//'[31m NO PARAMETER FILES GIVEN '//achar(27)//'[0m'
        print*,''//achar(27)//'[31m DEFAULT VALUES WILL BE TAKEN '//achar(27)//'[0m'
-       call default_value_init()
-       call print_selected_parameters()
+       call default_value_init(application)
+       call print_selected_parameters(application)
     else if (n_arg.eq.1) then
        call get_command_argument(n_arg,param_file_name)
        print*,''//achar(27)//'[32m PARAMETER FILE GIVEN : '//achar(27)//'[0m',param_file_name
        call read_param(param_file_name)
-       call print_selected_parameters()
+       call print_selected_parameters(application)
     else
        print*,'NUMBER OF ARGUMENT NOT VALID'
     end if
@@ -136,84 +142,147 @@ contains
 
   end subroutine read_param
 
-  subroutine default_value_init()
-    implicit none
 
-    total_length=1.0
-    final_time=3.0
-    nb_elem=100
-    order=2
-    DoF=order+1
-    bernstein=.true.
-    alpha=1.0
-    time_scheme='RK4'
-    signal='flat'
-    boundaries='ABC'
-    nb_iter_fwi=25
-    strategy='ATD'
-    scalar_product='canonical'
-    adjoint_test=.false.
-    source_loc=1
-    receiver_loc=30
-    size_velocity_data=1
-    allocate(velocity_data(size_velocity_data))
-    velocity_data=1.0
-    size_velocity_ini=1
-    allocate(velocity_ini(size_velocity_ini))
-    velocity_ini=1.0
-    size_density_data=1
-    allocate(density_data(size_density_data))
-    density_data=1.0
-    size_density_ini=1
-    allocate(density_ini(size_density_ini))
-    density_ini=1.0
-    animation='data_forward'
-    k_max=1e3
-    epsilon=1e-5
+  subroutine default_value_init(application)
+    implicit none
+    character(len=*),intent(in) :: application
+
+    if (application.eq.'fwi') then
+       total_length=1.0
+       final_time=3.0
+       nb_elem=100
+       order=2
+       DoF=order+1
+       bernstein=.true.
+       alpha=1.0
+       time_scheme='RK4'
+       signal='flat'
+       boundaries='ABC'
+       nb_iter_fwi=25
+       strategy='ATD'
+       scalar_product='canonical'
+       adjoint_test=.false.
+       source_loc=1
+       receiver_loc=30
+       size_velocity_data=1
+       allocate(velocity_data(size_velocity_data))
+       velocity_data=1.0
+       size_velocity_ini=1
+       allocate(velocity_ini(size_velocity_ini))
+       velocity_ini=1.0
+       size_density_data=1
+       allocate(density_data(size_density_data))
+       density_data=1.0
+       size_density_ini=1
+       allocate(density_ini(size_density_ini))
+       density_ini=1.0
+       animation='no'
+       k_max=1e3
+       epsilon=1e-5
+    else if (application.eq.'forward') then
+       total_length=1.0
+       final_time=3.0
+       nb_elem=100
+       order=2
+       DoF=order+1
+       bernstein=.true.
+       alpha=1.0
+       time_scheme='RK4'
+       signal='flat'
+       boundaries='ABC'
+       source_loc=1
+       receiver_loc=30
+       size_velocity_data=1
+       allocate(velocity_data(size_velocity_data))
+       velocity_data=1.0
+       size_density_data=1
+       allocate(density_data(size_density_data))
+       density_data=1.0
+       animation='no'
+       k_max=1e3
+       epsilon=1e-5
+    end if
 
   end subroutine default_value_init
 
 
-  subroutine print_selected_parameters()
+  subroutine print_selected_parameters(application)
     implicit none
+    character(len=*),intent(in) :: application
 
-    print*,''//achar(27)//'[96m####################### PARAMETERS SELECTED ############################ '//achar(27)//'[0m'
-    print*,''
-    print*,''//achar(27)//'[96m####################### PROBLEM SIZE ################################### '//achar(27)//'[0m'
-    print*,''//achar(27)//'[92mtotal_length       ='//achar(27)//'[0m',total_length
-    print*,''//achar(27)//'[92mfinal_time         ='//achar(27)//'[0m',final_time
-    print*,''//achar(27)//'[96m####################### PROBLEM DISCRETIZATION ######################### '//achar(27)//'[0m'
-    print*,''//achar(27)//'[92mnb_elem            ='//achar(27)//'[0m',nb_elem
-    print*,''//achar(27)//'[92morder              ='//achar(27)//'[0m',order
-    print*,''//achar(27)//'[92mDoF                ='//achar(27)//'[0m',DoF
-    print*,''//achar(27)//'[92mbernstein          ='//achar(27)//'[0m',bernstein
-    print*,''//achar(27)//'[92malpha              ='//achar(27)//'[0m',alpha
-    print*,''//achar(27)//'[92mtime_scheme        ='//achar(27)//'[0m',time_scheme
-    print*,''//achar(27)//'[96m####################### DIRECT PROBLEM SPECIFICITIES ###################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92msignal             ='//achar(27)//'[0m',signal
-    print*,''//achar(27)//'[92mboundaries         ='//achar(27)//'[0m',boundaries
-    print*,''//achar(27)//'[96m###################### FWI SPECIFICITIES ###############################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92mnb_iter_fwi        ='//achar(27)//'[0m',nb_iter_fwi
-    print*,''//achar(27)//'[92mstrategy           ='//achar(27)//'[0m',strategy
-    print*,''//achar(27)//'[92mscalar_product     ='//achar(27)//'[0m',scalar_product
-    print*,''//achar(27)//'[92madjoint_test       ='//achar(27)//'[0m',adjoint_test
-    print*,''//achar(27)//'[96m#################### SOURCE AND RECEIVER LOCATION ######################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92msource_loc         ='//achar(27)//'[0m',source_loc
-    print*,''//achar(27)//'[92mreceiver_loc       ='//achar(27)//'[0m',receiver_loc
-    print*,''//achar(27)//'[96m##################### VELOCITY MODEL ###################################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92msize_velocity_data ='//achar(27)//'[0m',size_velocity_data
-    print*,''//achar(27)//'[92mvelocity_data      ='//achar(27)//'[0m',velocity_data
-    print*,''//achar(27)//'[92msize_velocity_ini  ='//achar(27)//'[0m',size_velocity_ini
-    print*,''//achar(27)//'[92mvelocity_ini       ='//achar(27)//'[0m',velocity_ini
-    print*,''//achar(27)//'[96m##################### DENSITY MODEL ####################################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92msize_density_data  ='//achar(27)//'[0m',size_density_data
-    print*,''//achar(27)//'[92mdensity_data       ='//achar(27)//'[0m',density_data
-    print*,''//achar(27)//'[92msize_density_ini   ='//achar(27)//'[0m',size_density_ini
-    print*,''//achar(27)//'[92mdensity_ini        ='//achar(27)//'[0m',density_ini
-    print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
-    print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
-    print*,''
-    print*,''
+
+    if (application.eq.'fwi') then
+
+       print*,''//achar(27)//'[96m####################### PARAMETERS SELECTED ############################ '//achar(27)//'[0m'
+       print*,''
+       print*,''//achar(27)//'[96m####################### PROBLEM SIZE ################################### '//achar(27)//'[0m'
+       print*,''//achar(27)//'[92mtotal_length       ='//achar(27)//'[0m',total_length
+       print*,''//achar(27)//'[92mfinal_time         ='//achar(27)//'[0m',final_time
+       print*,''//achar(27)//'[96m####################### PROBLEM DISCRETIZATION ######################### '//achar(27)//'[0m'
+       print*,''//achar(27)//'[92mnb_elem            ='//achar(27)//'[0m',nb_elem
+       print*,''//achar(27)//'[92morder              ='//achar(27)//'[0m',order
+       print*,''//achar(27)//'[92mDoF                ='//achar(27)//'[0m',DoF
+       print*,''//achar(27)//'[92mbernstein          ='//achar(27)//'[0m',bernstein
+       print*,''//achar(27)//'[92malpha              ='//achar(27)//'[0m',alpha
+       print*,''//achar(27)//'[92mtime_scheme        ='//achar(27)//'[0m',time_scheme
+       print*,''//achar(27)//'[96m####################### DIRECT PROBLEM SPECIFICITIES ###################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msignal             ='//achar(27)//'[0m',signal
+       print*,''//achar(27)//'[92mboundaries         ='//achar(27)//'[0m',boundaries
+       print*,''//achar(27)//'[96m###################### FWI SPECIFICITIES ###############################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92mnb_iter_fwi        ='//achar(27)//'[0m',nb_iter_fwi
+       print*,''//achar(27)//'[92mstrategy           ='//achar(27)//'[0m',strategy
+       print*,''//achar(27)//'[92mscalar_product     ='//achar(27)//'[0m',scalar_product
+       print*,''//achar(27)//'[92madjoint_test       ='//achar(27)//'[0m',adjoint_test
+       print*,''//achar(27)//'[96m#################### SOURCE AND RECEIVER LOCATION ######################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msource_loc         ='//achar(27)//'[0m',source_loc
+       print*,''//achar(27)//'[92mreceiver_loc       ='//achar(27)//'[0m',receiver_loc
+       print*,''//achar(27)//'[96m##################### VELOCITY MODEL ###################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msize_velocity_data ='//achar(27)//'[0m',size_velocity_data
+       print*,''//achar(27)//'[92mvelocity_data      ='//achar(27)//'[0m',velocity_data
+       print*,''//achar(27)//'[92msize_velocity_ini  ='//achar(27)//'[0m',size_velocity_ini
+       print*,''//achar(27)//'[92mvelocity_ini       ='//achar(27)//'[0m',velocity_ini
+       print*,''//achar(27)//'[96m##################### DENSITY MODEL ####################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msize_density_data  ='//achar(27)//'[0m',size_density_data
+       print*,''//achar(27)//'[92mdensity_data       ='//achar(27)//'[0m',density_data
+       print*,''//achar(27)//'[92msize_density_ini   ='//achar(27)//'[0m',size_density_ini
+       print*,''//achar(27)//'[92mdensity_ini        ='//achar(27)//'[0m',density_ini
+       print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
+       print*,''
+       print*,''
+
+    else if (application.eq.'forward') then
+
+       print*,''//achar(27)//'[96m####################### PARAMETERS SELECTED ############################ '//achar(27)//'[0m'
+       print*,''
+       print*,''//achar(27)//'[96m####################### PROBLEM SIZE ################################### '//achar(27)//'[0m'
+       print*,''//achar(27)//'[92mtotal_length       ='//achar(27)//'[0m',total_length
+       print*,''//achar(27)//'[92mfinal_time         ='//achar(27)//'[0m',final_time
+       print*,''//achar(27)//'[96m####################### PROBLEM DISCRETIZATION ######################### '//achar(27)//'[0m'
+       print*,''//achar(27)//'[92mnb_elem            ='//achar(27)//'[0m',nb_elem
+       print*,''//achar(27)//'[92morder              ='//achar(27)//'[0m',order
+       print*,''//achar(27)//'[92mDoF                ='//achar(27)//'[0m',DoF
+       print*,''//achar(27)//'[92mbernstein          ='//achar(27)//'[0m',bernstein
+       print*,''//achar(27)//'[92malpha              ='//achar(27)//'[0m',alpha
+       print*,''//achar(27)//'[92mtime_scheme        ='//achar(27)//'[0m',time_scheme
+       print*,''//achar(27)//'[96m####################### DIRECT PROBLEM SPECIFICITIES ###################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msignal             ='//achar(27)//'[0m',signal
+       print*,''//achar(27)//'[92mboundaries         ='//achar(27)//'[0m',boundaries
+       print*,''//achar(27)//'[96m#################### SOURCE AND RECEIVER LOCATION ######################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msource_loc         ='//achar(27)//'[0m',source_loc
+       print*,''//achar(27)//'[92mreceiver_loc       ='//achar(27)//'[0m',receiver_loc
+       print*,''//achar(27)//'[96m##################### VELOCITY MODEL ###################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msize_velocity_data ='//achar(27)//'[0m',size_velocity_data
+       print*,''//achar(27)//'[92mvelocity_data      ='//achar(27)//'[0m',velocity_data
+       print*,''//achar(27)//'[96m##################### DENSITY MODEL ####################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92msize_density_data  ='//achar(27)//'[0m',size_density_data
+       print*,''//achar(27)//'[92mdensity_data       ='//achar(27)//'[0m',density_data
+       print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
+       print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
+       print*,''
+       print*,''
+    end if
+
   end subroutine print_selected_parameters
 
 end module m_init_application
