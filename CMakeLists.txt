@@ -11,23 +11,31 @@ endif()
 project(FWI)
 enable_language(Fortran)
 
+# Define source files
+file(GLOB SRC "src/*.f90")
+
 # Libraries
+add_library(fwi_lib ${SRC})
+message("Library created")
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
-# Define source files
-file(GLOB SRC "src/*.f90")
+target_compile_options(fwi_lib PRIVATE -freal-4-real-8)
+target_compile_options(fwi_lib PRIVATE -fdefault-real-8)
 
 #--------------------- APPLICATIONS ---------------------------
 
 # FORWARD APPLICATION
 #set sources
-set(FORWARD_SOURCES applications/forward.f90 ${SRC})
+set(FORWARD_SOURCES applications/forward.f90)
 add_executable(FORWARD ${FORWARD_SOURCES})
 #target compilation
 target_compile_options(FORWARD PRIVATE -freal-4-real-8)
 target_compile_options(FORWARD PRIVATE -fdefault-real-8)
 #Add libraries
+
+  target_link_libraries(FORWARD fwi_lib)
+
 if(LAPACK_FOUND AND BLAS_FOUND)
   target_link_libraries(FORWARD ${BLAS_LIBRARIES})
   target_link_libraries(FORWARD ${LAPACK_LIBRARIES})
@@ -37,18 +45,18 @@ message(" ${BoldGreen}APPLICATION FORWARD CREATED !!! ${ColourReset}")
 
 # FWI APPLICATION
 #set sources
-set(FWI_SOURCES applications/fwi.f90 ${SRC})
+set(FWI_SOURCES applications/fwi.f90)
 add_executable(FWI ${FWI_SOURCES})
 #target compilation
 target_compile_options(FWI PRIVATE -freal-4-real-8)
 target_compile_options(FWI PRIVATE -fdefault-real-8)
 #Add libraries
+target_link_libraries(FWI fwi_lib)
 if(LAPACK_FOUND AND BLAS_FOUND)
   target_link_libraries(FWI ${BLAS_LIBRARIES})
   target_link_libraries(FWI ${LAPACK_LIBRARIES})
 endif()
 message(" ${BoldGreen}APPLICATION FWI CREATED !!! ${ColourReset}")
-
 
 #--------------------- TESTS ---------------------------
 enable_testing()
@@ -65,14 +73,13 @@ add_test(Forward_without_param ${CMAKE_BINARY_DIR}/FORWARD)
 add_test(FWI_without_param_word ${CMAKE_BINARY_DIR}/FWI)
 
 
-
-
 #------------------ CUSTOM TARGETS --------------------
 add_custom_target(data_clean
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/Files/*.dat
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/fort.*
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.gif
-  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.dat)
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.dat
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.a)
 
 add_custom_target(cleanall
   COMMAND make clean
