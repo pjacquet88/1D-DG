@@ -1,4 +1,5 @@
 program main
+  use m_kind
   use m_file_function
   use m_polynom
   use m_matrix
@@ -21,6 +22,11 @@ program main
   integer,dimension(:), allocatable :: seed
   !******************************************************************************
 
+  real(mp),parameter :: mp_test=1.0
+
+  print*,'test my precision :',kind(mp_test)
+
+  
   call setup_parameters('forward')
 
   call date_and_time(values=values)

@@ -12,7 +12,7 @@ project(FWI)
 enable_language(Fortran)
 
 # Define source files
-file(GLOB SRC "src/*.f90")
+file(GLOB SRC "src/*90")
 
 # Libraries
 add_library(fwi_lib ${SRC})
@@ -20,6 +20,7 @@ message("Library created")
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
+target_compile_options(fwi_lib PRIVATE -DKIND_REAL=dp)
 target_compile_options(fwi_lib PRIVATE -freal-4-real-8)
 target_compile_options(fwi_lib PRIVATE -fdefault-real-8)
 
@@ -30,6 +31,7 @@ target_compile_options(fwi_lib PRIVATE -fdefault-real-8)
 set(FORWARD_SOURCES applications/forward.f90)
 add_executable(FORWARD ${FORWARD_SOURCES})
 #target compilation
+target_compile_options(FORWARD PRIVATE -DKIND_REAL=dp)
 target_compile_options(FORWARD PRIVATE -freal-4-real-8)
 target_compile_options(FORWARD PRIVATE -fdefault-real-8)
 #Add libraries
@@ -48,6 +50,7 @@ message(" ${BoldGreen}APPLICATION FORWARD CREATED !!! ${ColourReset}")
 set(FWI_SOURCES applications/fwi.f90)
 add_executable(FWI ${FWI_SOURCES})
 #target compilation
+target_compile_options(FWI PRIVATE -DKIND_REAL=dp)
 target_compile_options(FWI PRIVATE -freal-4-real-8)
 target_compile_options(FWI PRIVATE -fdefault-real-8)
 #Add libraries
