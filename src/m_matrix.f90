@@ -1,13 +1,13 @@
 module m_matrix
-
+  use m_kind
   implicit none
-  
+
   type sparse_matrix
-     integer :: NNN
-     integer :: nb_ligne
-     real,dimension(:),allocatable :: Values
-     integer,dimension(:),allocatable :: IA
-     integer,dimension(:),allocatable :: JA
+     integer                           :: NNN
+     integer                           :: nb_ligne
+     real(mp),dimension(:),allocatable :: Values
+     integer ,dimension(:),allocatable :: IA
+     integer ,dimension(:),allocatable :: JA
   end type sparse_matrix
 
 
@@ -29,26 +29,33 @@ contains
   ! Returns the inverse of a matrix calculated by finding the LU
   ! decomposition.  Depends on LAPACK.
   function LU_inv(A)
-    real,dimension(:,:), intent(in) :: A
-    real,dimension(size(A,1),size(A,2)) :: LU_inv
-  
-    real,   dimension(size(A,1)) :: work  ! work array for LAPACK
-    integer,dimension(size(A,1)) :: ipiv   ! pivot indices
-    integer :: n, info,i
+    real(mp),dimension(:,:), intent(in) :: A
+
+    real(mp),dimension(size(A,1),size(A,2)) :: LU_inv
+    real(mp),dimension(size(A,1))           :: work      ! work array for LAPACK
+    integer ,dimension(size(A,1))           :: ipiv      ! pivot indices
+    integer                                 :: n, info,i
 
     ! External procedures defined in LAPACK
-    external SGETRF
-    external SGETRI
+    ! if (kind(mp).eq.kind(sp)) then
+    !    external SGETRF
+    !    external SGETRI
+    ! elseif (kind(mp).eq.kind(dp)) then
+    !    external DGETRF
+    !    external DGETRI
+    ! end if
 
     ! Store A in Ainv to prevent it from being overwritten by LAPACK
     LU_inv = A
     n = size(A,1)
-
+   
     ! DGETRF computes an LU factorization of a general M-by-N matrix A
     ! using partial pivoting with row interchanges.+
-
-    ! call SGETRF(n, n, LU_inv, n, ipiv, info)
-    call DGETRF(n, n, LU_inv, n, ipiv, info)
+    if (mp.eq.sp) then
+       call SGETRF(n, n, LU_inv, n, ipiv, info)
+    elseif (mp.eq.dp) then
+       call DGETRF(n, n, LU_inv, n, ipiv, info)
+    end if
 
     if (info /= 0) then
        stop 'Matrix is numerically singular!'
@@ -56,8 +63,11 @@ contains
 
     ! DGETRI computes the inverse of a matrix using the LU factorization
     ! computed by DGETRF.
-   !  call SGETRI(n, LU_inv, n, ipiv, work, n, info)
-    call DGETRI(n, LU_inv, n, ipiv, work, n, info)
+    if (mp.eq.sp) then
+       call SGETRI(n, LU_inv, n, ipiv, work, n, info)
+    elseif (mp.eq.dp) then
+       call DGETRI(n, LU_inv, n, ipiv, work, n, info)
+    end if
 
     if (info /= 0) then
        stop 'Matrix inversion failed!'
@@ -71,9 +81,10 @@ contains
     type(sparse_matrix),intent(inout) :: A
     integer            ,intent(in)    :: NNN
     integer            ,intent(in)    :: nb_ligne
-    integer,dimension(:)  ,optional      :: IA
-    integer,dimension(:)  ,optional      :: JA
-    real,dimension(:)  ,optional      :: Values
+
+    integer ,dimension(:) ,optional :: IA
+    integer ,dimension(:) ,optional :: JA
+    real(mp),dimension(:) ,optional :: Values
 
     A%NNN=NNN
     A%nb_ligne=nb_ligne
@@ -103,19 +114,18 @@ contains
     deallocate(A%IA)
     deallocate(A%JA)
   end subroutine free_sparse_matrix
-    
 
   ! Get the number of non zero values in a full matrix
   function get_NNN(A)
-    real,dimension(:,:),intent(in) :: A
-    integer                        :: get_NNN
-    integer                        :: i,j
+    real(mp),dimension(:,:),intent(in) :: A
+    integer                            :: get_NNN
+    integer                            :: i,j
 
     get_NNN=0
     do i=1,size(A,1)
        do j=1,size(A,2)
 
-          if(A(i,j).ne.0.0) then
+          if(A(i,j).ne.0.0_mp) then
              get_NNN=get_NNN+1
           end if
        end do
@@ -125,10 +135,10 @@ contains
 
   ! Change a matrix in a sparse one
   subroutine Full2Sparse(Full,Sparse)
-    real,dimension(:,:),intent(in)  :: Full
-    type(sparse_matrix),intent(out) :: Sparse
-    integer                         :: i,j,ivalues,jja,NNN_ligne
-    
+    real(mp),dimension(:,:),intent(in)  :: Full
+    type(sparse_matrix)    ,intent(out) :: Sparse
+    integer                             :: i,j,ivalues,jja,NNN_ligne
+
     call init_sparse_matrix(Sparse,get_NNN(Full),size(Full,1))
     ivalues=1
     jja=1
@@ -137,7 +147,7 @@ contains
        NNN_ligne=0
        do j=1,size(Full,2)
 
-          if (Full(i,j).ne.0.0) then
+          if (Full(i,j).ne.0.0_mp) then
              Sparse%Values(ivalues)=Full(i,j)
              ivalues=ivalues+1
              NNN_ligne=NNN_ligne+1
@@ -152,12 +162,13 @@ contains
 
   ! Change a sparse matrix in a full one
   subroutine Sparse2Full(sparse,full)
-    type(sparse_matrix),intent(in)    :: sparse
-    real,dimension(:,:),allocatable,intent(inout) :: full
+    type(sparse_matrix)                ,intent(in)    :: sparse
+    real(mp),dimension(:,:),allocatable,intent(inout) :: full
+
     integer :: i,j,nb_value,iia
-    
+
     allocate(full(sparse%nb_ligne,sparse%nb_ligne))
-    full=0.0
+    full=0.0_mp
 
     do i=1,sparse%nb_ligne
        nb_value=sparse%IA(i-1)
@@ -172,7 +183,7 @@ contains
   subroutine transpose_sparse(sparse,t_sparse)
     type(sparse_matrix),intent(in)  :: sparse
     type(sparse_matrix),intent(inout) :: t_sparse
-    real,dimension(:,:),allocatable :: full
+    real(mp),dimension(:,:),allocatable :: full
 
     call init_sparse_matrix(t_sparse,sparse%NNN,sparse%nb_ligne)
     call Sparse2Full(sparse,full)
@@ -185,11 +196,11 @@ contains
   ! Apply a sparse matrix/vector product
   function sparse_MV(A,X)
     type(sparse_matrix),intent(in) :: A
-    real,dimension(:)  ,intent(in) :: X
-    real,dimension(A%nb_ligne)     :: sparse_MV
+    real(mp),dimension(:)  ,intent(in) :: X
+    real(mp),dimension(A%nb_ligne)     :: sparse_MV
     integer                        :: i,j
 
-    sparse_MV=0.0
+    sparse_MV=0.0_mp
     do i=1,A%nb_ligne
        do j=A%IA(i-1)+1,A%IA(i)
           sparse_MV(i)=sparse_MV(i)+A%Values(j)*X(A%JA(j))
@@ -203,7 +214,7 @@ contains
     type(sparse_matrix),intent(in)  :: A
     type(sparse_matrix),intent(in)  :: B
     type(sparse_matrix)             :: sparse_MM
-    real,dimension(:,:),allocatable :: A_full,B_full,C_full
+    real(mp),dimension(:,:),allocatable :: A_full,B_full,C_full
 
     call Sparse2Full(A,A_full)
     call Sparse2Full(B,B_full)
@@ -228,10 +239,10 @@ contains
     print*,'JA :',A%JA
   end subroutine print_sparse_matrix
 
-  
+
   ! Test if a matrix is symetric or not
   subroutine is_sym(A)
-    real,dimension(:,:),intent(in) :: A
+    real(mp),dimension(:,:),intent(in) :: A
     integer :: i,j
     logical :: test
 
@@ -258,13 +269,14 @@ contains
   ! Test if a sparse matrix is symetric or not
   subroutine sparse_is_sym(sparse_A)
     type(sparse_matrix),intent(in) :: sparse_A
-    real,dimension(:,:),allocatable:: A
-    integer :: i,j
-    logical :: test
+
+    real(mp),dimension(:,:),allocatable:: A
+    integer                            :: i,j
+    logical                            :: test
 
     call Sparse2Full(sparse_A,A)
 
-    test=.TRUE.  
+    test=.TRUE.
     do i=1,size(A,1)
        do j=i,size(A,1)
 

@@ -1,21 +1,22 @@
 ! This module contains matrices and functions used in Lagrange and Bernstein
 ! polynomial definitions
 module m_polynom
+  use m_kind
   use m_matrix
   implicit none
 
-  real               ,dimension(:,:),allocatable :: B2L,L2B,D0,D1
-  real               ,dimension(:,:),allocatable :: base_b
-  real               ,dimension(:,:),allocatable :: base_l
-  type(sparse_matrix)                            :: D0_sparse,D1_sparse
-  
+  real(mp),dimension(:,:),allocatable :: B2L,L2B,D0,D1
+  real(mp),dimension(:,:),allocatable :: base_b
+  real(mp),dimension(:,:),allocatable :: base_l
+  type(sparse_matrix)                 :: D0_sparse,D1_sparse
+
 
   public  :: eval_polynom_b,eval_polynom_l,                                     &
              init_basis_b,init_basis_l,                                         &
              create_L2B,create_B2L,create_derive,                               &
              free_L2B,free_B2L,free_derive,                                     &
              Bernstein2Lagrange,Lagrange2Bernstein,B2L,L2B,D1,D0
-  
+
   private :: D0_sparse,D1_sparse,                                               &
              C,b_basis,l_basis
 contains
@@ -24,11 +25,11 @@ contains
   ! Calculates the combination C(n,k)
   function C(n,k)
     integer,intent(in) :: n,k
-    real               :: C
-    integer :: i
+    real(mp)           :: C
+    integer            :: i
 
     if (k.eq.0) then
-       C=1.0
+       C=1.0_mp
     else
        C=real(n)/real(k)
 
@@ -41,32 +42,33 @@ contains
 
   ! Evaluates one Bernstein polynomial basis B(i,j) at x, with x in [0,1]
   function b_basis(i,j,x)
-    integer,intent(in) :: i,j
-    real,   intent(in) :: x
-    real               :: b_basis
+    integer ,intent(in) :: i,j
+    real(mp),intent(in) :: x
+    real(mp)            :: b_basis
 
-    b_basis=C(i+j,i)*x**i*(1.0-x)**j
+    b_basis=C(i+j,i)*x**i*(1.0_mp-x)**j
 
-    if ((x.gt.0.0).and.(b_basis.gt.1.0)) then
-       print*,'error',b_basis,i,j,x,(1.0-x),C(i+j,i),x**j,(1.0-x)**i
+    if ((x.gt.0.0_mp).and.(b_basis.gt.1.0_mp)) then
+       print*,'error',b_basis,i,j,x,(1.0_mp-x),C(i+j,i),x**j,(1.0_mp-x)**i
     end if
   end function b_basis
 
   ! Initializes the Bernstein basis
   subroutine init_basis_b(ordre)
     integer,intent(in) :: ordre
-    integer :: i
-    real,dimension(ordre+1) :: coef
+
+    integer                     :: i
+    real(mp),dimension(ordre+1) :: coef
 
     allocate(base_b(ordre+1,ordre+1))
 
-    coef=0.0
-    coef(1)=1.0
+    coef=0.0_mp
+    coef(1)=1.0_mp
     base_b(1,:)=coef
 
     do i=2,ordre+1
-       coef(i-1)=0.0
-       coef(i)=1.0
+       coef(i-1)=0.0_mp
+       coef(i)=1.0_mp
        base_b(i,:)=coef
     end do
   end subroutine init_basis_b
@@ -79,13 +81,13 @@ contains
 
   ! Evaluates a Bernstein polynomial using De Calsteljau algorithm
   function eval_polynom_b(pol,x)
-    real,dimension(:),intent(in) :: pol
-    real             ,intent(in) :: x
-    real                         :: eval_polynom_b
-    integer                      :: i,j
-    real,dimension(:),allocatable:: barycentre1,barycentre2
+    real(mp),dimension(:),intent(in)  :: pol
+    real(mp)             ,intent(in)  :: x
+    real(mp)                          :: eval_polynom_b
+    real(mp),dimension(:),allocatable :: barycentre1,barycentre2
+    integer                           :: i,j
 
-    eval_polynom_b=0.0
+    eval_polynom_b=0.0_mp
     allocate(barycentre1(size(pol)))
     barycentre1=pol
     do i=1,size(pol)-1
@@ -104,18 +106,19 @@ contains
 
   ! Evaluates one Lagrange polynomial basis at x, with x in [O,1]
   function l_basis(ordre,n,x)
-    integer,intent(in)       :: ordre
-    integer,intent(in)       :: n
-    real   ,intent(in)       :: x
-    real                     :: l_basis
-    real,dimension(ordre+1)  :: xi
-    integer                  :: i
+    integer ,intent(in)       :: ordre
+    integer ,intent(in)       :: n
+    real(mp),intent(in)       :: x
+
+    real(mp)                    :: l_basis
+    real(mp),dimension(ordre+1) :: xi
+    integer                     :: i
 
     do i=1,ordre+1
-       xi(i)=(i-1)*(1.0/ordre)
+       xi(i)=(i-1)*(1.0_mp/ordre)
     end do
 
-    l_basis=1.0
+    l_basis=1.0_mp
 
     do i=1,n-1
        l_basis=l_basis*(x-xi(i))/(xi(n)-xi(i))
@@ -131,16 +134,16 @@ contains
   subroutine init_basis_l(ordre)
     integer,intent(in) :: ordre
     integer :: i
-    real,dimension(ordre+1) :: coef
+    real(mp),dimension(ordre+1) :: coef
 
     allocate(base_l(ordre+1,ordre+1))
-    coef=0.0
-    coef(1)=1.0
+    coef=0.0_mp
+    coef(1)=1.0_mp
     base_l(1,:)=coef
 
     do i=2,ordre+1
-       coef(i-1)=0.0
-       coef(i)=1.0
+       coef(i-1)=0.0_mp
+       coef(i)=1.0_mp
        base_l(i,:)=coef
     end do
   end subroutine init_basis_l
@@ -154,12 +157,12 @@ contains
 
   ! Evaluates a Lagrange polynomial at x, with x in [0,1]
   function eval_polynom_l(pol,x)
-    real,dimension(:),intent(in) :: pol
-    real             ,intent(in) :: x
-    real                         :: eval_polynom_l
-    integer                      :: i
+    real(mp),dimension(:),intent(in) :: pol
+    real(mp)             ,intent(in) :: x
+    real(mp)                         :: eval_polynom_l
+    integer                          :: i
 
-    eval_polynom_l=0.0    
+    eval_polynom_l=0.0_mp
     do i=1,size(pol)
        eval_polynom_l=eval_polynom_l+pol(i)*l_basis(size(pol)-1,i,x)
     end do
@@ -171,13 +174,15 @@ contains
   ! Creates a matrix that transforms a vector of Bernstein polynomial coefficients
   ! into a vector of Lagrange polynomial coefficients
   subroutine create_B2L
-    integer :: i,j
+    integer  :: i,j
+    real(mp) :: x
 
     allocate(B2L(size(base_b,1),size(base_b,1)))
 
     do j=1,size(base_b,1)
+       x=real((j-1))/(size(base_b,1)-1)
        do i=1,size(base_b,1)
-          B2L(j,i)=eval_polynom_b(base_b(i,:),real((j-1))/(size(base_b,1)-1))
+          B2L(j,i)=eval_polynom_b(base_b(i,:),x)
        end do
     end do
   end subroutine create_B2L
@@ -192,14 +197,15 @@ contains
   ! Subroutine which changes a Bernstein polynomial coefficients into
   ! a Lagrangian polynomial coefficients
   subroutine Bernstein2Lagrange(bpol,lpol,nb_elem,DoF)
-    real,dimension(nb_elem*DoF),intent(in) :: bpol
-    real,dimension(nb_elem*DoF),intent(out) :: lpol
-    integer                    ,intent(in)  :: nb_elem
-    integer                    ,intent(in)  :: DoF
-    real,dimension(DoF):: blocpol
+    real(mp),dimension(nb_elem*DoF),intent(in)  :: bpol
+    real(mp),dimension(nb_elem*DoF),intent(out) :: lpol
+    integer                        ,intent(in)  :: nb_elem
+    integer                        ,intent(in)  :: DoF
+    real(mp),dimension(DoF):: blocpol
 
-    integer :: i,j
-    real    :: x
+    integer  :: i,j
+    real(mp) :: x
+
     do i=1,nb_elem
        lpol((i-1)*DoF+1:i*DoF)=matmul(B2L,bpol((i-1)*DoF+1:i*DoF))
     end do
@@ -223,11 +229,10 @@ contains
   ! Subroutine which changes a Lagrange polynomial coefficients into
   ! a Bernstein polynomial coefficients
   subroutine Lagrange2Bernstein(lpol,bpol)
-    real,dimension(:),intent(in)  :: lpol
-    real,dimension(:),intent(out) :: bpol
+    real(mp),dimension(:),intent(in)  :: lpol
+    real(mp),dimension(:),intent(out) :: bpol
     bpol=matmul(L2B,lpol)
   end subroutine Lagrange2Bernstein
-
 
 
   !!****************FONCTIONS DERIVES*******************************************
@@ -242,8 +247,8 @@ contains
     allocate(D0(ordre+1,ordre+1))
     allocate(D1(ordre+1,ordre+1))  
 
-    D0=0.0
-    D1=0.0
+    D0=0.0_mp
+    D1=0.0_mp
 
     do i=2,ordre+1
        D0(i,i)=-real(i-1)
@@ -270,8 +275,8 @@ contains
 
   ! Gets the global sparse derivative matrix
   subroutine deriv_pol_b(bpol,dbpol)
-    real,dimension(:),intent(in)  :: bpol
-    real,dimension(:),intent(out) :: dbpol
+    real(mp),dimension(:),intent(in)  :: bpol
+    real(mp),dimension(:),intent(out) :: dbpol
     dbpol=sparse_matmul(D1_sparse,bpol)-sparse_matmul(D0_sparse,bpol)
   end subroutine deriv_pol_b
 

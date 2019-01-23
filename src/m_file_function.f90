@@ -1,5 +1,6 @@
 ! This module contain some function concerning files and vectors
 module m_file_function
+  use m_kind
   use m_polynom
   implicit none
 
@@ -11,8 +12,8 @@ contains
   !*************** PRIVATE ******************************************************
   ! Calculate the norm of a vector U
   function norm(U)
-    real,dimension(:),intent(in) :: U
-    real                         :: norm
+    real(mp),dimension(:),intent(in) :: U
+    real(mp)                         :: norm
 
     norm=sqrt(dot_product(U,U))
   end function norm
@@ -39,14 +40,14 @@ contains
   !*************** PUBLIC   *****************************************************
   ! Load a vector in a specific file .dat
   subroutine load(U,char,N)
-    real,dimension(:),intent(inout):: U
-    character(len=*) ,intent(in)   :: char
-    integer          ,intent(in)   :: N
-    real                           :: dummy
-    integer                        :: i
-    character(len=50)              :: fichier
+    real(mp),dimension(:),intent(inout):: U
+    character(len=*) ,intent(in)       :: char
+    integer          ,intent(in)       :: N
+    real(mp)                           :: dummy
+    integer                            :: i
+    character(len=50)                  :: fichier
 
-    U=0.0
+    U=0.0_mp
     write(fichier,"(A,A,I0,'.dat')") "../Bernstein/Files/",char,N
     
     open(unit=456,file=fichier, form="formatted",action='read')
@@ -61,21 +62,27 @@ contains
 
   ! Print a vector in a specific file
   subroutine print_vect(vector,nb_elem,DoF,dx,bernstein,N,name)
-    real,dimension(nb_elem*DoF),intent(in) :: vector
-    integer                    ,intent(in) :: nb_elem
-    integer                    ,intent(in) :: DoF
-    real                       ,intent(in) :: dx
-    logical                    ,intent(in) :: bernstein
-    integer                    ,intent(in) :: N
-    character(len=*)           ,intent(in) :: name
+    real(mp),dimension(nb_elem*DoF),intent(in) :: vector
+    integer                        ,intent(in) :: nb_elem
+    integer                        ,intent(in) :: DoF
+    real(mp)                       ,intent(in) :: dx
+    logical                        ,intent(in) :: bernstein
+    integer                        ,intent(in) :: N
+    character(len=*)               ,intent(in) :: name
     
     integer :: i,j
     character(len=20)           :: F_NAME
-    real                        :: x,ddx
-    real,dimension(DoF) :: vector_work
+    real(mp)                    :: x,ddx
+    real(mp),dimension(DoF)     :: vector_work
 
     ddx=dx/(DoF-1)
-    x=0.0
+    x=0.0_mp
+    
+    if (N.eq.1300) then
+       print*,'test kind vector', kind(vector)
+       print*,'vector(1) :',vector(1)
+       STOP
+    end if
     
     write(F_NAME,"(A,A,I0,'.dat')") "../Files/",name,N
     open(unit=2, file=F_NAME, action="write")
@@ -107,23 +114,23 @@ contains
     end if
     close(2)
   end subroutine print_vect
-  
+
 
   ! Add a laplacian filter on a vector
   function laplace_filter(u)
-    real,dimension(:),intent(in)    :: u
-    real,dimension(size(u),size(u)) :: L,Linv,test
-    integer                         :: i,j
-    real,dimension(size(u))         :: laplace_filter
+    real(mp),dimension(:),intent(in)    :: u
+    real(mp),dimension(size(u),size(u)) :: L,Linv,test
+    integer                             :: i,j
+    real(mp),dimension(size(u))         :: laplace_filter
 
-    L=0.0
+    L=0.0_mp
 
     do i=30,size(u)-30
        L(i,i)=2
        L(i,i-1)=-1
        L(i,i+1)=-1
     end do
-    
+
     L(size(u),size(u))=2
     L(size(u),size(u)-1)=-1
 

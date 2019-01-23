@@ -10,16 +10,16 @@ program main
   implicit none
 
   !*************** Main Variables ***********************************************
-  type(acoustic_problem)            :: forward
+  type(acoustic_problem)              :: forward
 
-  real                              :: t
-  integer                           :: i,j,k
-  integer                           :: forward_n_time_step
-  real,dimension(:,:),allocatable   :: data_P
-  real,dimension(:,:),allocatable   :: data_U
+  real(mp)                            :: t
+  integer                             :: i,j,k
+  integer                             :: forward_n_time_step
+  real(mp),dimension(:,:),allocatable :: data_P
+  real(mp),dimension(:,:),allocatable :: data_U
 
-  integer                           :: values(1:8)
-  integer,dimension(:), allocatable :: seed
+  integer                             :: values(1:8)
+  integer,dimension(:), allocatable   :: seed
   !******************************************************************************
 
   real(mp),parameter :: mp_test=1.0

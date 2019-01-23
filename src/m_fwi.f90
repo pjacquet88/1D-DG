@@ -1,4 +1,5 @@
 module m_fwi
+  use m_kind
   use m_file_function
   use m_matrix
   use m_time_scheme
@@ -8,53 +9,53 @@ module m_fwi
   implicit none
 
   type t_fwi
-     type(acoustic_problem)          :: forward         ! the forward state
-     type(adjoint_problem)           :: backward        ! the backwardstate 
-     integer                         :: nb_iter         ! nb iteration of the fwi
-     integer                         :: current_iter    ! nb of the current iteration
-     real,dimension(:)  ,allocatable :: velocity_model  ! the velocity model
-     real,dimension(:)  ,allocatable :: density_model   ! the density model
-     integer                         :: n_time_step     ! nb of time step
-     real,dimension(:,:),allocatable :: data_P          ! pressure measured at the receiver
-     real,dimension(:,:),allocatable :: data_U          ! velocity measured at the reciever
-     real,dimension(:,:),allocatable :: P_received      ! pressure simulated at the receiver
-     real,dimension(:,:),allocatable :: U_received      ! velocity simulated at the receiver
-     real,dimension(:,:),allocatable :: P               ! forward pressure state in space and time
-     real,dimension(:,:),allocatable :: U               ! forward velocity state in space and time
-     real,dimension(:,:),allocatable :: QP              ! backward pressure state in space and time
-     real,dimension(:,:),allocatable :: QU              ! backward velocity state in space and time
-     real,dimension(:,:),allocatable :: FP              ! forward dtP equation RHS in space and time
-     real,dimension(:,:),allocatable :: FU              ! forward dtU equation RHS in space and time
-     real,dimension(:,:),allocatable :: FP_half         ! forward dtP equation in space and time (on half time)
-     real,dimension(:,:),allocatable :: FU_half         ! forward dtU equation in space and time (on half time)
-     real,dimension(:,:),allocatable :: DP              ! backward dtQP equation in space and time
-     real,dimension(:,:),allocatable :: DU              ! backward dtQU equation in space and time
-     real,dimension(:,:),allocatable :: GP              ! combined forward dtP RHS in space and time (G=EF)
-     real,dimension(:,:),allocatable :: GU              ! combined foward dtU RHS in space and time (G=EF)
-     real,dimension(:)  ,allocatable :: gradient_rho    ! gradient of the density model
-     real,dimension(:)  ,allocatable :: gradient_vp     ! gradient of the velocity model
-     real,dimension(:,:),allocatable :: M               ! Mass Matrix
-     real,dimension(:,:),allocatable :: Ap
-     real,dimension(:,:),allocatable :: App
-     real,dimension(:,:),allocatable :: Av
+     type(acoustic_problem)              :: forward         ! the forward state
+     type(adjoint_problem)               :: backward        ! the backwardstate 
+     integer                             :: nb_iter         ! nb iteration of the fwi
+     integer                             :: current_iter    ! nb of the current iteration
+     real(mp),dimension(:)  ,allocatable :: velocity_model  ! the velocity model
+     real(mp),dimension(:)  ,allocatable :: density_model   ! the density model
+     integer                             :: n_time_step     ! nb of time step
+     real(mp),dimension(:,:),allocatable :: data_P          ! pressure measured at the receiver
+     real(mp),dimension(:,:),allocatable :: data_U          ! velocity measured at the reciever
+     real(mp),dimension(:,:),allocatable :: P_received      ! pressure simulated at the receiver
+     real(mp),dimension(:,:),allocatable :: U_received      ! velocity simulated at the receiver
+     real(mp),dimension(:,:),allocatable :: P               ! forward pressure state in space and time
+     real(mp),dimension(:,:),allocatable :: U               ! forward velocity state in space and time
+     real(mp),dimension(:,:),allocatable :: QP              ! backward pressure state in space and time
+     real(mp),dimension(:,:),allocatable :: QU              ! backward velocity state in space and time
+     real(mp),dimension(:,:),allocatable :: FP              ! forward dtP equation RHS in space and time
+     real(mp),dimension(:,:),allocatable :: FU              ! forward dtU equation RHS in space and time
+     real(mp),dimension(:,:),allocatable :: FP_half         ! forward dtP equation in space and time (on half time)
+     real(mp),dimension(:,:),allocatable :: FU_half         ! forward dtU equation in space and time (on half time)
+     real(mp),dimension(:,:),allocatable :: DP              ! backward dtQP equation in space and time
+     real(mp),dimension(:,:),allocatable :: DU              ! backward dtQU equation in space and time
+     real(mp),dimension(:,:),allocatable :: GP              ! combined forward dtP RHS in space and time (G=EF)
+     real(mp),dimension(:,:),allocatable :: GU              ! combined foward dtU RHS in space and time (G=EF)
+     real(mp),dimension(:)  ,allocatable :: gradient_rho    ! gradient of the density model
+     real(mp),dimension(:)  ,allocatable :: gradient_vp     ! gradient of the velocity model
+     real(mp),dimension(:,:),allocatable :: M               ! Mass Matrix
+     real(mp),dimension(:,:),allocatable :: Ap
+     real(mp),dimension(:,:),allocatable :: App
+     real(mp),dimension(:,:),allocatable :: Av
 
-     integer                         :: nb_elem         ! nb of elements
-     integer                         :: DoF             ! degree of freedom per elements
-     character(len=20)               :: time_scheme     ! time scheme used
-     real                            :: total_length    ! total length of the domain
-     real                            :: final_time      ! final time of the experiment
-     real                            :: dt              ! time step length
-     real                            :: dx              ! 1D elements size
-     real                            :: alpha           ! penalization
-     logical                         :: bernstein       ! logical if T -> Bernstein
-     character(len=20)               :: signal          ! initial perturbation (take flat)
-     character(len=20)               :: boundaries      ! boundary condition
-     integer                         :: source_loc      ! source location (at the beginning of an element)
-     integer                         :: receiver_loc    ! receiver location (at the beginnig of an element)
-     character(len=20)               :: strategy        ! ATD or DTA
-     character(len=20)               :: scalar_product  ! inner prodct (canonical or M)
-     logical                         :: adjoint_test    ! logical for adjoint test
-     character(len=20)               :: animation       ! string for animation
+     integer                             :: nb_elem         ! nb of elements
+     integer                             :: DoF             ! degree of freedom per elements
+     character(len=20)                   :: time_scheme     ! time scheme used
+     real(mp)                            :: total_length    ! total length of the domain
+     real(mp)                            :: final_time      ! final time of the experiment
+     real(mp)                            :: dt              ! time step length
+     real(mp)                            :: dx              ! 1D elements size
+     real(mp)                            :: alpha           ! penalization
+     logical                             :: bernstein       ! logical if T -> Bernstein
+     character(len=20)                   :: signal          ! initial perturbation (take flat)
+     character(len=20)                   :: boundaries      ! boundary condition
+     integer                             :: source_loc      ! source location (at the beginning of an element)
+     integer                             :: receiver_loc    ! receiver location (at the beginnig of an element)
+     character(len=20)                   :: strategy        ! ATD or DTA
+     character(len=20)                   :: scalar_product  ! inner prodct (canonical or M)
+     logical                             :: adjoint_test    ! logical for adjoint test
+     character(len=20)                   :: animation       ! string for animation
   end type t_fwi
 
   public  :: t_fwi,init_fwi,free_fwi,one_fwi_step,                      &
@@ -69,29 +70,30 @@ contains
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
                       bernstein,source_loc,receiver_loc,strategy,               &
                       scalar_product,animation,adjoint_test)
-    type(t_fwi)        ,intent(inout) :: fwi
-    integer            ,intent(in)    :: nb_iter
-    real,dimension(:)  ,intent(in)    :: velocity_ini
-    real,dimension(:)  ,intent(in)    :: density_ini
-    real,dimension(:,:),intent(in)    :: data_P
-    real,dimension(:,:),intent(in)    :: data_U
-    integer            ,intent(in)    :: nb_elem
-    integer            ,intent(in)    :: DoF
-    character(len=*)   ,intent(in)    :: time_scheme
-    real               ,intent(in)    :: total_length
-    real               ,intent(in)    :: final_time
-    real               ,intent(in)    :: alpha
-    logical            ,intent(in)    :: bernstein
-    integer            ,intent(in)    :: source_loc
-    integer            ,intent(in)    :: receiver_loc
-    character(len=*)   ,intent(in)    :: strategy
-    character(len=*)   ,intent(in)    :: scalar_product
-    character(len=*)   ,intent(in)    :: animation
-    logical            ,intent(in)    :: adjoint_test
+    type(t_fwi)            ,intent(inout) :: fwi
+    integer                ,intent(in)    :: nb_iter
+    real(mp),dimension(:)  ,intent(in)    :: velocity_ini
+    real(mp),dimension(:)  ,intent(in)    :: density_ini
+    real(mp),dimension(:,:),intent(in)    :: data_P
+    real(mp),dimension(:,:),intent(in)    :: data_U
+    integer                ,intent(in)    :: nb_elem
+    integer                ,intent(in)    :: DoF
+    character(len=*)       ,intent(in)    :: time_scheme
+    real(mp)               ,intent(in)    :: total_length
+    real(mp)               ,intent(in)    :: final_time
+    real(mp)               ,intent(in)    :: alpha
+    logical                ,intent(in)    :: bernstein
+    integer                ,intent(in)    :: source_loc
+    integer                ,intent(in)    :: receiver_loc
+    character(len=*)       ,intent(in)    :: strategy
+    character(len=*)       ,intent(in)    :: scalar_product
+    character(len=*)       ,intent(in)    :: animation
+    logical                ,intent(in)    :: adjoint_test
 
-    integer :: i,j,dv,dp
-    real    :: epsilon_vp
+    integer           :: i,j,dv,dp
+    real(mp)          :: epsilon_vp
     character(len=50) :: fichier
+
     fwi%nb_iter=nb_iter
 
     allocate(fwi%velocity_model(nb_elem))
@@ -167,12 +169,12 @@ contains
   subroutine one_fwi_step(fwi)
     type(t_fwi),intent(inout) :: fwi
     integer                   :: current_time_step
-    real                      :: t
-    real                      :: t1,t2
+    real(mp)                  :: t
+    real(mp)                  :: t1,t2
 
-    real,dimension(fwi%DoF*fwi%nb_elem) :: RTM
-    integer                             :: i,j
-    type(t_adjoint_test)                :: test
+    real(mp),dimension(fwi%DoF*fwi%nb_elem) :: RTM
+    integer                                 :: i,j
+    type(t_adjoint_test)                    :: test
 
 
     call init_acoustic_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
@@ -199,8 +201,8 @@ contains
     fwi%QP(:,0)=0
     fwi%U(:,0)=0
     fwi%QU(:,0)=0
-    fwi%P_received(:,:)=0.0
-    fwi%U_received(:,:)=0.0
+    fwi%P_received(:,:)=0.0_mp
+    fwi%U_received(:,:)=0.0_mp
 
     if (fwi%adjoint_test) then
        allocate(fwi%FP(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
@@ -237,10 +239,10 @@ contains
     end do
 
     if (fwi%adjoint_test) then
-       fwi%FP(:,fwi%forward%n_time_step)=0.0
-       fwi%FU(:,fwi%forward%n_time_step)=0.0
-       fwi%FP(:,0)=0.0
-       fwi%FU(:,0)=0.0
+       fwi%FP(:,fwi%forward%n_time_step)=0.0_mp
+       fwi%FU(:,fwi%forward%n_time_step)=0.0_mp
+       fwi%FP(:,0)=0.0_mp
+       fwi%FU(:,0)=0.0_mp
        call fwi_extract_g(fwi)
     end if
 
@@ -315,10 +317,10 @@ contains
     end do
 
     if (fwi%adjoint_test) then
-       fwi%DP(:,0)=0.0
-       fwi%DU(:,0)=0.0
-       fwi%DP(:,fwi%backward%n_time_step)=0.0
-       fwi%DU(:,fwi%backward%n_time_step)=0.0
+       fwi%DP(:,0)=0.0_mp
+       fwi%DU(:,0)=0.0_mp
+       fwi%DP(:,fwi%backward%n_time_step)=0.0_mp
+       fwi%DU(:,fwi%backward%n_time_step)=0.0_mp
     end if
 
     if (fwi%animation.eq.'fwi_backward') then
@@ -400,13 +402,13 @@ contains
   subroutine fwi_extract_g(fwi)
     type(t_fwi),intent(inout) :: fwi
 
-    real,dimension(size(fwi%P,1)) :: Pk1,Pk2
-    real,dimension(size(fwi%P,1)) :: Uk1,Uk2
-    integer :: i
-    real,dimension(size(fwi%P,1)) :: zero
-    zero=0.0
-    fwi%GP=0.0
-    fwi%GU=0.0
+    real(mp),dimension(size(fwi%P,1)) :: Pk1,Pk2
+    real(mp),dimension(size(fwi%P,1)) :: Uk1,Uk2
+    integer                           :: i
+    real(mp),dimension(size(fwi%P,1)) :: zero
+    zero=0.0_mp
+    fwi%GP=0.0_mp
+    fwi%GU=0.0_mp
 
     if (fwi%time_scheme.eq.'LF') then
        print*,'not possible yet for Leap Frog'
@@ -423,10 +425,10 @@ contains
 
     else if (fwi%time_scheme.eq.'AB3') then
 
-       Pk1=0.0
-       Pk2=0.0
-       Uk1=0.0
-       Uk2=0.0
+       Pk1=0.0_mp
+       Pk2=0.0_mp
+       Uk1=0.0_mp
+       Uk2=0.0_mp
 
        call  AB3_forward(fwi%GP(:,0),fwi%GU(:,0),fwi%forward%Ap,fwi%forward%Av, &
                          fwi%forward%App,fwi%FP(:,0),fwi%FU(:,0),               &
@@ -459,22 +461,22 @@ contains
 
   ! Evaluates the FWI gradient for the ATD strategy
   subroutine gradient_ATD_computation(fwi)
-    type(t_fwi),intent(inout) :: fwi
-    real,dimension(fwi%DoF)       :: dtu,dtp,qu,qp
-    real,dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
-    real,dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
-    real,dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
+    type(t_fwi),intent(inout)               :: fwi
+    real(mp),dimension(fwi%DoF)             :: dtu,dtp,qu,qp
+    real(mp),dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
+    real(mp),dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
+    real(mp),dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
 
-    integer :: nb_elem,DoF,beg_node,end_node
-    integer :: i,j,k
-    real    :: moyenne
+    integer  :: nb_elem,DoF,beg_node,end_node
+    integer  :: i,j,k
+    real(mp) :: moyenne
 
 
     nb_elem=fwi%nb_elem   ! For sake of
     DoF=fwi%DoF           ! readibility
 
-    fwi%gradient_vp=0.0
-    fwi%gradient_rho=0.0
+    fwi%gradient_vp=0.0_mp
+    fwi%gradient_rho=0.0_mp
 
     do j=0,fwi%n_time_step
        do i=1,nb_elem
@@ -527,14 +529,14 @@ contains
 
           end if
 
-          moyenne=0.0
+          moyenne=0.0_mp
           do k=1,DoF
              moyenne=dtp(k)*qp(k)
           end do
           moyenne=moyenne/DoF
 
           fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
-               -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
+               -2.0_mp/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
 
        end do
     end do
@@ -546,29 +548,33 @@ contains
 
      ! Evaluate the FWI gradient for the DTA strategy
      subroutine gradient_DTA_computation(fwi)
-       type(t_fwi),intent(inout) :: fwi
-       real,dimension(fwi%DoF)       :: dtu,dtp,qu,qp
-       real,dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
-       real,dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
-       real,dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
+       type(t_fwi),intent(inout)               :: fwi
+       real(mp),dimension(fwi%DoF)             :: dtu,dtp,qu,qp
+       real(mp),dimension(fwi%DoF*fwi%nb_elem) :: u0,u1,u2
+       real(mp),dimension(fwi%DoF*fwi%nb_elem) :: p0,p1,p2
+       real(mp),dimension(fwi%DoF*fwi%nb_elem) :: dtp_glob
 
-       integer :: nb_elem,DoF,beg_node,end_node
-       integer :: i,j,k
-       real    :: one_parameter,moyenne
-       real,dimension(fwi%DoF,fwi%DoF) :: M_loc
-       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Ap_loc
-       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: App_loc
-       real,dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Av_loc
+       integer                                         :: nb_elem
+       integer                                         :: DoF
+       integer                                         :: beg_node
+       integer                                         :: end_node
+       integer                                         :: i,j,k
+       real(mp)                                        :: one_parameter
+       real(mp)                                        :: moyenne
+       real(mp),dimension(fwi%DoF,fwi%DoF)             :: M_loc
+       real(mp),dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Ap_loc
+       real(mp),dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: App_loc
+       real(mp),dimension(fwi%DoF,fwi%DoF*fwi%nb_elem) :: Av_loc
 
-       type(sparse_matrix)                         :: Ap_sparse_loc
-       type(sparse_matrix)                         :: App_sparse_loc
-       type(sparse_matrix)                         :: Av_sparse_loc
+       type(sparse_matrix)                             :: Ap_sparse_loc
+       type(sparse_matrix)                             :: App_sparse_loc
+       type(sparse_matrix)                             :: Av_sparse_loc
 
 
        nb_elem=fwi%nb_elem   ! For sake of
        DoF=fwi%DoF           ! readibility
-       fwi%gradient_vp=0.0
-       fwi%gradient_rho=0.0
+       fwi%gradient_vp=0.0_mp
+       fwi%gradient_rho=0.0_mp
 
 
        if (fwi%time_scheme.eq.'RK4') then
@@ -624,14 +630,14 @@ contains
                 end if
              end if
 
-             moyenne=0.0
+             moyenne=0.0_mp
              do k=1,DoF
                 moyenne=dtp(k)*qp(k)
              end do
              moyenne=moyenne/DoF
 
              fwi%gradient_vp(i)=fwi%gradient_vp(i)                              &
-                  -2.0/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
+                  -2.0_mp/(fwi%density_model(i)*fwi%velocity_model(i)**3)*moyenne
           end do
        end do
 
@@ -640,7 +646,7 @@ contains
        fwi%gradient_vp=fwi%gradient_vp*fwi%dx*fwi%dt
 
        if ((fwi%strategy.eq.'DTA').and.(fwi%time_scheme.eq.'AB3')) then
-          fwi%gradient_vp=0.0
+          fwi%gradient_vp=0.0_mp
 
           fwi%App(1,1)=fwi%App(1,1)/fwi%velocity_model(1)
           fwi%App(fwi%DoF*fwi%nb_elem,fwi%DoF*fwi%nb_elem)=                     &
@@ -648,7 +654,7 @@ contains
                fwi%velocity_model(fwi%DoF)
 
              do i=1,nb_elem
-                Ap_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)/(0.5*fwi%velocity_model(i))
+                Ap_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)/(0.5_mp*fwi%velocity_model(i))
                 App_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)
                 Av_loc=fwi%Ap((i-1)*DoF+1:i*DoF,:)
 
@@ -666,29 +672,29 @@ contains
                 u0=(fwi%U(:,j))
                 p0=(fwi%P(:,j))
                 if (j.eq.0) then
-                   u1=0.0
-                   u2=0.0
-                   p1=0.0
-                   p2=0.0
+                   u1=0.0_mp
+                   u2=0.0_mp
+                   p1=0.0_mp
+                   p2=0.0_mp
                 else if (j.eq.1) then
                    u1=(fwi%U(:,j-1))
                    p1=(fwi%P(:,j-1))
-                   u2=0.0
-                   p2=0.0
+                   u2=0.0_mp
+                   p2=0.0_mp
                 else
                    u1=(fwi%U(:,j-1))
                    p1=(fwi%P(:,j-1))
                    u2=(fwi%U(:,j-2))
                    p2=(fwi%P(:,j-2))
 
-                   dtp=-23.0/12.0*(sparse_matmul(App_sparse_loc,p0)   &
+                   dtp=-23.0_mp/12.0_mp*(sparse_matmul(App_sparse_loc,p0)   &
                                    +sparse_matmul(Ap_sparse_loc,u0))  &
-                        +16.0/12.0*(sparse_matmul(App_sparse_loc,p1)  &
+                        +16.0_mp/12.0_mp*(sparse_matmul(App_sparse_loc,p1)  &
                                     +sparse_matmul(Ap_sparse_loc,u1)) &
-                        -5.0/12.0*(sparse_matmul(App_sparse_loc,p2)   &
+                        -5.0_mp/12.0_mp*(sparse_matmul(App_sparse_loc,p2)   &
                                     +sparse_matmul(Ap_sparse_loc,u2))
 
-                   moyenne=0.0
+                   moyenne=0.0_mp
                    do k=1,fwi%DoF
                       moyenne=dtp(k)*qp(k)
                    end do
@@ -709,12 +715,12 @@ contains
     integer                         :: i,j
     integer,parameter               :: nb_section=9
     integer,dimension(nb_section,2) :: lim_section
-    real,dimension(nb_section)      :: grad
-    real,parameter                  :: beta=0.03
+    real(mp),dimension(nb_section)  :: grad
+    real(mp),parameter              :: beta=0.03_mp
     character(len=50)               :: fichier
 
 
-    grad=0.0
+    grad=0.0_mp
 
     do i=1,nb_section
        lim_section(i,1)=(i-1)*int(fwi%nb_elem/nb_section)+1
@@ -722,17 +728,17 @@ contains
     end do
     lim_section(nb_section,2)=fwi%nb_elem
 
-    grad(1:3)=0.0
+    grad(1:3)=0.0_mp
     do i=4,nb_section
        grad(i)=sum(fwi%gradient_vp(lim_section(i,1):lim_section(i,2)))
     end do
 
-    if (maxval(abs(grad)).eq.0.0) then
+    if (maxval(abs(grad)).eq.0.0_mp) then
        print*,'The gradient is null, end of the fwi algorithm'
        STOP
     else
-       grad=(1.0/maxval(abs(grad)))*grad
-       !grad=(1.0/grad(50))*grad
+       grad=(1.0_mp/maxval(abs(grad)))*grad
+       !grad=(1.0_mp/grad(50))*grad
     end if
 
     open(unit=19,file='grad.dat')
@@ -743,10 +749,10 @@ contains
     do i=1,nb_section
        do j=lim_section(i,1),lim_section(i,2)
           fwi%velocity_model(j)=fwi%velocity_model(j)-beta*grad(i)
-          if (fwi%velocity_model(j).lt.1.0) then
-             fwi%velocity_model(j)=1.0
-          else if (fwi%velocity_model(j).gt.2.0) then
-             fwi%velocity_model(j)=2.0
+          if (fwi%velocity_model(j).lt.1.0_mp) then
+             fwi%velocity_model(j)=1.0_mp
+          else if (fwi%velocity_model(j).gt.2.0_mp) then
+             fwi%velocity_model(j)=2.0_mp
           end if
        end do
     end do
@@ -761,26 +767,26 @@ contains
 
   ! Evaluates the Cost function
   subroutine cost_function(P_received,data_P,final_time,iter)
-    real,dimension(:,:),intent(in) :: P_received
-    real,dimension(:,:),intent(in) :: data_P
-    real               ,intent(in) :: final_time
-    integer            ,intent(in) :: iter
-    real                           :: CF
-    real :: eval_P_received,eval_data_P
-    real :: dt,t
-    integer :: j,i,n_time_step
+    real(mp),dimension(:,:),intent(in) :: P_received
+    real(mp),dimension(:,:),intent(in) :: data_P
+    real(mp)               ,intent(in) :: final_time
+    integer                ,intent(in) :: iter
+    real(mp)                           :: CF
+    real(mp)                           :: eval_P_received,eval_data_P
+    real(mp)                           :: dt,t
+    integer                            :: j,i,n_time_step
 
     dt=P_received(2,1)-P_received(1,1)
     dt=min(dt,data_P(2,1)-data_P(1,1))
 
     n_time_step=max(size(P_received,1),size(data_P,1))
 
-    CF=0.0
+    CF=0.0_mp
 
     do j=2,n_time_step-1
        t=(j-1)*dt
-       eval_P_received=0.0
-       eval_data_P=0.0
+       eval_P_received=0.0_mp
+       eval_data_P=0.0_mp
 
        i=1
        do while ((P_received(i,1).le.t))
@@ -819,11 +825,11 @@ contains
     end do
 
     CF=CF*dt
-    CF=0.5*CF
+    CF=0.5_mp*CF
 
     write(33,*) iter,CF
 
-    if (CF.eq.0.0) then
+    if (CF.eq.0.0_mp) then
        print*,'The gradient is null, end of the FWI algorithm'
        STOP
     end if

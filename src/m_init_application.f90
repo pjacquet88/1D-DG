@@ -1,19 +1,19 @@
 module m_init_application
-
+  use m_kind
   implicit none
 
   !*************** Problem Parameters *******************************************
   integer           :: nb_elem        ! Nb of elements (all same length)
   integer           :: order,DoF      ! Polynoms order
-  real              :: total_length   ! domain length
-  real              :: final_time     ! final time
+  real(mp)          :: total_length   ! domain length
+  real(mp)          :: final_time     ! final time
   character(len=20) :: time_scheme    ! change the time scheme
-  real              :: alpha          ! Penalisation value
+  real(mp)          :: alpha          ! Penalisation value
   character(len=20) :: signal         ! initial values (flat = 0)
   character(len=20) :: boundaries     ! Boundary Conditions
   logical           :: bernstein      ! If F-> Lagrange Elements
   integer           :: k_max          ! iterr max for power method algo.
-  real              :: epsilon        ! precision for power method algo.
+  real(mp)          :: epsilon        ! precision for power method algo.
   integer           :: source_loc     ! location of the source (elemts)
   integer           :: receiver_loc   ! location of the receiver(elemts)
   character(len=20) :: strategy       ! 'ATD' or 'DTA'
@@ -21,14 +21,14 @@ module m_init_application
   character(len=20) :: scalar_product ! scalar product that define bwd operator
   integer           :: nb_iter_fwi    ! nb iteration of the fwi algorithm
 
-  real,dimension(:),allocatable :: velocity_data      ! velocity model for data
-  real,dimension(:),allocatable :: velocity_ini       ! velocity model to ini fwi
-  real,dimension(:),allocatable :: density_data       ! density model for data
-  real,dimension(:),allocatable :: density_ini        ! dentsity model to ini fwi
-  integer                       :: size_velocity_data ! size of velocity_data
-  integer                       :: size_velocity_ini  ! size of velocity_ini
-  integer                       :: size_density_data  ! size of density_data
-  integer                       :: size_density_ini   ! size of density_ini
+  real(mp),dimension(:),allocatable :: velocity_data      ! velocity model for data
+  real(mp),dimension(:),allocatable :: velocity_ini       ! velocity model to ini fwi
+  real(mp),dimension(:),allocatable :: density_data       ! density model for data
+  real(mp),dimension(:),allocatable :: density_ini        ! dentsity model to ini fwi
+  integer                           :: size_velocity_data ! size of velocity_data
+  integer                           :: size_velocity_ini  ! size of velocity_ini
+  integer                           :: size_density_data  ! size of density_data
+  integer                           :: size_density_ini   ! size of density_ini
 
   character(len=20) :: animation
 

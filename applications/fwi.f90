@@ -1,10 +1,10 @@
 program main
+  use m_kind
   use m_file_function
   use m_polynom
   use m_matrix
   use m_acoustic
   use m_adjoint
-  use m_adjoint_test
   use m_fwi
   use m_init_application
   use m_animation
@@ -12,19 +12,19 @@ program main
   implicit none
 
   !*************** Main Variables ***********************************************
-  type(acoustic_problem)            :: forward,backward
-  type(t_fwi)                       :: fwi
-  real,dimension(:,:),allocatable   :: data_P
-  real,dimension(:,:),allocatable   :: data_U
+  type(acoustic_problem)              :: forward,backward
+  type(t_fwi)                         :: fwi
+  real(mp),dimension(:,:),allocatable :: data_P
+  real(mp),dimension(:,:),allocatable :: data_U
 
-  real                              :: t
-  integer                           :: i,j
+  real(mp)                            :: t
+  integer                             :: i,j
 
-  integer                           :: data_time_step
-  integer                           :: fwi_time_step
+  integer                             :: data_time_step
+  integer                             :: fwi_time_step
 
-  integer                           :: values(1:8), k
-  integer,dimension(:), allocatable :: seed
+  integer                             :: values(1:8), k
+  integer,dimension(:), allocatable   :: seed
   !******************************************************************************
 
   call setup_parameters('fwi')
