@@ -81,8 +81,6 @@ program main
      print*,'FWI in progress...'
      print*,' '
 
-     print*,'test velocity ini',size(velocity_ini), velocity_ini
-
      call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
                    nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
                    bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
