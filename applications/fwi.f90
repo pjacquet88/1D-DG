@@ -36,12 +36,8 @@ program main
   call random_seed(put=seed)
 
   !*********** Polynomial initialization *************
-  call init_basis_b(order)
-  call init_basis_l(order)
-  call create_B2L
-  call create_L2B
-  call create_derive(order)
-
+  call init_polynom(order)
+  
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
                              bernstein,signal,boundaries,source_loc,receiver_loc)
@@ -77,34 +73,31 @@ program main
 
   call free_acoustic_problem(forward)
 
-     print*,' '
-     print*,'FWI in progress...'
-     print*,' '
+  print*,' '
+  print*,'FWI in progress...'
+  print*,' '
 
-     call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
-                   nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
-                   bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
-                   animation,adjoint_test)
+  call init_fwi(fwi,nb_iter_fwi,velocity_ini,density_ini,data_P,data_U,      &
+                nb_elem,DoF,time_scheme,total_length,final_time,alpha,       &
+                bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
+                animation,adjoint_test)
 
-     do i=1,fwi%nb_iter
-        fwi%current_iter=i
-       call progress_bar(i,fwi%nb_iter)
-       call one_fwi_step(fwi)
-     end do
-     call free_fwi(fwi)
+  do i=1,fwi%nb_iter
+     fwi%current_iter=i
+     call progress_bar(i,fwi%nb_iter)
+     call one_fwi_step(fwi)
+  end do
+  call free_fwi(fwi)
 
-     print*,' '
-     print*,'... FWI finished'
-     print*,' '
+  print*,' '
+  print*,'... FWI finished'
+  print*,' '
 
   !--------------------- Animation ----------------------------------------------
-     call gif_creation(animation,nb_iter_fwi,data_time_step)
+  call gif_creation(animation,nb_iter_fwi,data_time_step)
 
-  !------------------------ Free Variables --------------------------------------
-     call free_basis_b
-     call free_basis_l
-     call free_B2L
-     call free_L2B
-     call free_derive
+  !------------------------ Free polynoms --------------------------------------
+  call free_polynom
+
 
 end program main

@@ -35,13 +35,7 @@ program main
   seed(:) = values(8)
   call random_seed(put=seed)
 
-  !*********** Polynomial initialization *************
-  call init_basis_b(order)
-  call init_basis_l(order)
-  call create_B2L
-  call create_L2B
-  call create_derive(order)
-
+  call init_polynom(order)
 
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
@@ -83,10 +77,6 @@ program main
   call gif_creation(animation,forward_n_time_step,forward_n_time_step)
 
   !------------------------ Free Variables --------------------------------------
-  call free_basis_b
-  call free_basis_l
-  call free_B2L
-  call free_L2B
-  call free_derive
+  call free_polynom
 
 end program main
