@@ -78,12 +78,6 @@ contains
     ddx=dx/(DoF-1)
     x=0.0_mp
     
-    if (N.eq.1300) then
-       print*,'test kind vector', kind(vector)
-       print*,'vector(1) :',vector(1)
-       STOP
-    end if
-    
     write(F_NAME,"(A,A,I0,'.dat')") "../Files/",name,N
     open(unit=2, file=F_NAME, action="write")
     if (bernstein) then
