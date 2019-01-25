@@ -19,7 +19,7 @@ add_library(fwi_lib ${SRC})
 message("Library created")
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-target_compile_options(fwi_lib PRIVATE -DKIND_REAL=sp)
+target_compile_options(fwi_lib PRIVATE -DKIND_REAL=dp)
 
 #--------------------- APPLICATIONS ---------------------------
 
@@ -65,6 +65,60 @@ add_test(Forward_without_param ${CMAKE_BINARY_DIR}/FORWARD)
 
 # TEST3 : FWI_without_param
 add_test(FWI_without_param_word ${CMAKE_BINARY_DIR}/FWI)
+
+# TEST4 : Bernstein 1
+set(src_bb_eval tests/test_bernstein.f90)
+add_executable(test_bb_eval ${src_bb_eval})
+target_link_libraries(test_bb_eval fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_bb_eval ${BLAS_LIBRARIES})
+  target_link_libraries(test_bb_eval ${LAPACK_LIBRARIES})
+endif()
+add_test(bb_eval ${CMAKE_BINARY_DIR}/test_bb_eval)
+
+# TEST5 : Lagrange Mass Matrix
+set(src_mass_matrix_lag_eval tests/test_mass_matrix_lag_eval.f90)
+add_executable(test_mass_matrix_lag_eval ${src_mass_matrix_lag_eval})
+target_link_libraries(test_mass_matrix_lag_eval fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_mass_matrix_lag_eval ${BLAS_LIBRARIES})
+  target_link_libraries(test_mass_matrix_lag_eval ${LAPACK_LIBRARIES})
+endif()
+add_test(test_mass_matrix_lag_eval ${CMAKE_BINARY_DIR}/test_mass_matrix_lag_eval)
+
+
+# TEST6 : Bernstein Mass Matrix
+set(src_mass_matrix_bb_eval tests/test_mass_matrix_bb_eval.f90)
+add_executable(test_mass_matrix_bb_eval ${src_mass_matrix_bb_eval})
+target_link_libraries(test_mass_matrix_bb_eval fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_mass_matrix_bb_eval ${BLAS_LIBRARIES})
+  target_link_libraries(test_mass_matrix_bb_eval ${LAPACK_LIBRARIES})
+endif()
+add_test(test_mass_matrix_bb_eval ${CMAKE_BINARY_DIR}/test_mass_matrix_bb_eval)
+
+
+
+# TEST7 : Lagrange Stiffness Matrix
+set(src_stiff_matrix_lag_eval tests/test_stiff_matrix_lag_eval.f90)
+add_executable(test_stiff_matrix_lag_eval ${src_stiff_matrix_lag_eval})
+target_link_libraries(test_stiff_matrix_lag_eval fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_stiff_matrix_lag_eval ${BLAS_LIBRARIES})
+  target_link_libraries(test_stiff_matrix_lag_eval ${LAPACK_LIBRARIES})
+endif()
+add_test(test_stiff_matrix_lag_eval ${CMAKE_BINARY_DIR}/test_stiff_matrix_lag_eval)
+
+
+# TEST8 : Bernstein Stiffness Matrix
+set(src_stiff_matrix_bb_eval tests/test_stiff_matrix_bb_eval.f90)
+add_executable(test_stiff_matrix_bb_eval ${src_stiff_matrix_bb_eval})
+target_link_libraries(test_stiff_matrix_bb_eval fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_stiff_matrix_bb_eval ${BLAS_LIBRARIES})
+  target_link_libraries(test_stiff_matrix_bb_eval ${LAPACK_LIBRARIES})
+endif()
+add_test(test_stiff_matrix_bb_eval ${CMAKE_BINARY_DIR}/test_stiff_matrix_bb_eval)
 
 
 #------------------ CUSTOM TARGETS --------------------

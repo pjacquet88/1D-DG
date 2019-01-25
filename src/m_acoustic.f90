@@ -36,6 +36,7 @@ module m_acoustic
      type(sparse_matrix)             :: Av
      type(sparse_matrix)             :: Minv_p,Minv_v
      type(sparse_matrix)             :: M,Minv
+     type(sparse_matrix)             :: S
      !----------- SOURCE & RECEIVER ------------------
      integer                         :: source_loc    ! beginning of an element
      integer                         :: receiver_loc  ! beginning of an element
@@ -685,6 +686,7 @@ contains
     Av_full=0.0_mp
     call Full2Sparse(m_glob,problem%M)
     call Full2Sparse(minv_glob,problem%Minv)
+    call Full2Sparse(s_glob,problem%S)
 
     if (problem%bernstein) then
 
@@ -789,6 +791,7 @@ contains
     App_full=0.0_mp
     call Full2Sparse(m_glob,problem%M)
     call Full2Sparse(minv_glob,problem%Minv)
+    call Full2Sparse(s_glob,problem%S)
 
     if (problem%bernstein) then
 
@@ -986,6 +989,7 @@ contains
     call free_sparse_matrix(problem%Minv_v)
     call free_sparse_matrix(problem%M)
     call free_sparse_matrix(problem%Minv)
+    call free_sparse_matrix(problem%S)
     call free_sparse_matrix(problem%App)
   end subroutine free_acoustic_problem
 
