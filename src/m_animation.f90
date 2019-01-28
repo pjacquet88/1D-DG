@@ -1,125 +1,174 @@
 module m_animation
+ use m_file_function,  only : str
   implicit none
+
+  public  :: progress_bar,gif_creation
+  private :: gif_creation_python,gif_creation_gnuplot
 
 contains
 
-  subroutine gif_creation(animation,nb_iter_fwi,data_time_step)
+
+  subroutine gif_creation(gnuplot,animation,frame_step,modeling_max_step,fwi_max_step)
+    implicit none
+    logical         ,intent(in) :: gnuplot
+    character(len=*),intent(in) :: animation
+    integer         ,intent(in) :: frame_step
+    integer         ,intent(in) :: modeling_max_step
+    integer         ,intent(in) :: fwi_max_step
+    integer                     :: max_step
+
+    if (animation.eq.'model_update') then
+       max_step=fwi_max_step
+    else
+       max_step=modeling_max_step
+    end if
+
+    if (gnuplot) then
+       call gif_creation_gnuplot(animation,frame_step,max_step)
+    else
+       call gif_creation_python(animation,frame_step,max_step)
+    end if
+  end subroutine gif_creation
+
+
+  subroutine gif_creation_python(animation,frame_step,max_step)
     implicit none
     character(len=*),intent(in) :: animation
-    integer         ,intent(in) :: nb_iter_fwi
-    integer         ,intent(in) :: data_time_step
+    integer         ,intent(in) :: frame_step
+    integer         ,intent(in) :: max_step
+    character(len=100)          :: command
+    character(len=10)           :: prefix
 
-    integer :: n_frame
+    if (animation.eq.'no') then
+       print*,'No animation has been made'
+    else if (animation.eq.'model_update') then
+       prefix='VP'
+    elseif(animation.eq.'data_forward') then
+       prefix='FP'
+    elseif(animation.eq.'fwi_forward') then
+       prefix='P'
+    elseif(animation.eq.'fwi_backward') then
+       prefix='QP'
+    end if
+
+    if (animation.ne.'no') then
+       command='python3 ../animation_script/animation.py'//' '                  &
+            //trim(prefix)//' '//trim(str(frame_step))//' '//trim(str(max_step))
+       call system(command)
+    end if
+
+  end subroutine gif_creation_python
+
+
+  subroutine gif_creation_gnuplot(animation,frame_step,max_step)
+    implicit none
+    character(len=*),intent(in) :: animation
+    integer         ,intent(in) :: frame_step
+    integer         ,intent(in) :: max_step
 
     if (animation.eq.'no') then
        print*,'No animation has been made'
     else if (animation.eq.'model_update') then
 
-       n_frame=nb_iter_fwi
-
-       open(unit=78,file='../gnuplot_script/script.gnuplot',action='write')
-       write(78,*)'load "../gnuplot_script/trace1.gnuplot"'
-       write(78,*)'n=',nb_iter_fwi
-       write(78,*)'a=',1
-       write(78,*)'load "../gnuplot_script/trace2.gnuplot"'
+       open(unit=78,file='../animation_script/script.gnuplot',action='write')
+       write(78,*)'load "../animation_script/trace1.gnuplot"'
+       write(78,*)'n=',max_step
+       write(78,*)'a=',frame_step
+       write(78,*)'load "../animation_script/trace2.gnuplot"'
        close(78)
 
-       open(unit=79,file='../gnuplot_script/trace2.gnuplot',action='write')
+       open(unit=79,file='../animation_script/trace2.gnuplot',action='write')
        write(79,*)'dt=0.1/n'
        write(79,*)'i=0'
        write(79,*)'set yrange[0:2]'
-       write(79,*)'load "../gnuplot_script/animate.gnuplot"'
+       write(79,*)'load "../animation_script/animate.gnuplot"'
        close(79)
 
-       open(unit=80,file='../gnuplot_script/animate.gnuplot',action='write')
+       open(unit=80,file='../animation_script/animate.gnuplot',action='write')
        write(80,*) "plot '../Files/VP'.i.'.dat' w l title 'Velocity model'.i"
        write(80,*) "i=i+a"
        write(80,*) "if (i<n) reread"
        close(80)
 
-       call system("gnuplot ../gnuplot_script/script.gnuplot")
+       call system("gnuplot ../animation_script/script.gnuplot")
        call system("eog animate.gif")
 
     elseif(animation.eq.'data_forward') then
 
-       n_frame=data_time_step
-
-       open(unit=78,file='../gnuplot_script/script.gnuplot',action='write')
-       write(78,*)'load "../gnuplot_script/trace1.gnuplot"'
-       write(78,*)'n=',n_frame
-       write(78,*)'a=',10
-       write(78,*)'load "../gnuplot_script/trace2.gnuplot"'
+       open(unit=78,file='../animation_script/script.gnuplot',action='write')
+       write(78,*)'load "../animation_script/trace1.gnuplot"'
+       write(78,*)'n=',max_step
+       write(78,*)'a=',frame_step
+       write(78,*)'load "../animation_script/trace2.gnuplot"'
        close(78)
 
-       open(unit=79,file='../gnuplot_script/trace2.gnuplot',action='write')
+       open(unit=79,file='../animation_script/trace2.gnuplot',action='write')
        write(79,*)'dt=0.1/n'
        write(79,*)'i=0'
        write(79,*)'set yrange[-0.5:0.5]'
-       write(79,*)'load "../gnuplot_script/animate.gnuplot"'
+       write(79,*)'load "../animation_script/animate.gnuplot"'
        close(79)
 
-       open(unit=80,file='../gnuplot_script/animate.gnuplot',action='write')
+       open(unit=80,file='../animation_script/animate.gnuplot',action='write')
        write(80,*) "plot '../Files/FP'.i.'.dat' w l title 'Forward data pressure'.i"
        write(80,*) "i=i+a"
        write(80,*) "if (i<n) reread"
        close(80)
 
-       call system("gnuplot ../gnuplot_script/script.gnuplot")
+       call system("gnuplot ../animation_script/script.gnuplot")
        call system("eog animate.gif")
 
     elseif(animation.eq.'fwi_forward') then
 
-       n_frame=data_time_step
-       open(unit=78,file='../gnuplot_script/script.gnuplot',action='write')
-       write(78,*)'load "../gnuplot_script/trace1.gnuplot"'
-       write(78,*)'n=',n_frame
-       write(78,*)'a=',10
-       write(78,*)'load "../gnuplot_script/trace2.gnuplot"'
+       open(unit=78,file='../animation_script/script.gnuplot',action='write')
+       write(78,*)'load "../animation_script/trace1.gnuplot"'
+       write(78,*)'n=',max_step
+       write(78,*)'a=',frame_step
+       write(78,*)'load "../animation_script/trace2.gnuplot"'
        close(78)
 
-       open(unit=79,file='../gnuplot_script/trace2.gnuplot',action='write')
+       open(unit=79,file='../animation_script/trace2.gnuplot',action='write')
        write(79,*)'dt=0.1/n'
        write(79,*)'i=0'
        write(79,*)'set yrange[-0.5:0.5]'
-       write(79,*)'load "../gnuplot_script/animate.gnuplot"'
+       write(79,*)'load "../animation_script/animate.gnuplot"'
        close(79)
 
-       open(unit=80,file='../gnuplot_script/animate.gnuplot',action='write')
+       open(unit=80,file='../animation_script/animate.gnuplot',action='write')
        write(80,*) "plot '../Files/P'.i.'.dat' w l title 'Forward fwi pressure'.i"
        write(80,*) "i=i+a"
        write(80,*) "if (i<n) reread"
        close(80)
 
-       call system("gnuplot ../gnuplot_script/script.gnuplot")
+       call system("gnuplot ../animation_script/script.gnuplot")
        call system("eog animate.gif")
 
     elseif(animation.eq.'fwi_backward') then
 
-       n_frame=data_time_step
-       open(unit=78,file='../gnuplot_script/script.gnuplot',action='write')
-       write(78,*)'load "../gnuplot_script/trace1.gnuplot"'
-       write(78,*)'n=',n_frame
-       write(78,*)'a=',10
-       write(78,*)'load "../gnuplot_script/trace2.gnuplot"'
+       open(unit=78,file='../animation_script/script.gnuplot',action='write')
+       write(78,*)'load "../animation_script/trace1.gnuplot"'
+       write(78,*)'n=',max_step
+       write(78,*)'a=',frame_step
+       write(78,*)'load "../animation_script/trace2.gnuplot"'
        close(78)
 
-       open(unit=79,file='../gnuplot_script/trace2.gnuplot',action='write')
+       open(unit=79,file='../animation_script/trace2.gnuplot',action='write')
        write(79,*)'dt=0.1/n'
        write(79,*)'i=0'
        write(79,*)'set yrange[-0.2:0.2]'
-       write(79,*)'load "../gnuplot_script/animate.gnuplot"'
+       write(79,*)'load "../animation_script/animate.gnuplot"'
        close(79)
 
-       open(unit=80,file='../gnuplot_script/animate.gnuplot',action='write')
+       open(unit=80,file='../animation_script/animate.gnuplot',action='write')
        write(80,*) "plot '../Files/QP'.i.'.dat' w l title 'Backward fwi pressure'.i"
        write(80,*) "i=i+a"
        write(80,*) "if (i<n) reread"
        close(80)
 
-       call system("gnuplot ../gnuplot_script/script.gnuplot")
+       call system("gnuplot ../animation_script/script.gnuplot")
        call system("eog animate.gif")
     end if
-end subroutine gif_creation
+  end subroutine gif_creation_gnuplot
 
 subroutine progress_bar(iter,max_iter,o_bar_char,o_bar_length)
   implicit none

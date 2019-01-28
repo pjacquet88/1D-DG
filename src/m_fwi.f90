@@ -92,7 +92,6 @@ contains
 
     integer           :: i,j,dv,dp
     real(mp)          :: epsilon_vp
-    character(len=50) :: fichier
 
     fwi%nb_iter=nb_iter
 
@@ -143,13 +142,6 @@ contains
 
     fwi%signal='flat'
     fwi%boundaries='ABC'
-
-    write(fichier,"(A,A,I0,'.dat')") "../Files/",'VP',0
-    open(unit=28,file=fichier)
-    do i=1,fwi%nb_elem
-       write(28,*) i,fwi%velocity_model(i)
-    end do
-
   end subroutine init_fwi
 
   ! Deallocates all fwi type allocatable arrays
@@ -250,12 +242,12 @@ contains
        do i=0,fwi%n_time_step
           if (modulo(i,10).eq.0) then
 
-             call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,     &
+             call print_coef(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,     &
                              fwi%bernstein,i,'P')
 
           else if (i.eq.0) then
 
-             call print_vect(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,     &
+             call print_coef(fwi%P(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,     &
                              fwi%bernstein,i,'P')
 
           end if
@@ -326,10 +318,10 @@ contains
     if (fwi%animation.eq.'fwi_backward') then
        do i=0,fwi%n_time_step
           if (modulo(i,10).eq.0) then
-             call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,    &
+             call print_coef(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,    &
                              fwi%bernstein,i,'QP')
           else if (i.eq.0) then
-             call print_vect(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,    &
+             call print_coef(fwi%QP(:,i),fwi%nb_elem,fwi%DoF,fwi%forward%dx,    &
                              fwi%bernstein,i,'QP')
           end if
        end do
@@ -717,8 +709,6 @@ contains
     integer,dimension(nb_section,2) :: lim_section
     real(mp),dimension(nb_section)  :: grad
     real(mp),parameter              :: beta=0.03_mp
-    character(len=50)               :: fichier
-
 
     grad=0.0_mp
 
@@ -755,12 +745,6 @@ contains
              fwi%velocity_model(j)=2.0_mp
           end if
        end do
-    end do
-
-    write(fichier,"(A,A,I0,'.dat')") "../Files/",'VP',fwi%current_iter
-    open(unit=28,file=fichier)
-    do i=1,fwi%nb_elem
-       write(28,*) i,fwi%velocity_model(i)
     end do
   end subroutine update_model
 

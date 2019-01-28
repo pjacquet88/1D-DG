@@ -31,6 +31,8 @@ module m_init_application
   integer                           :: size_density_ini   ! size of density_ini
 
   character(len=20) :: animation
+  logical           :: gnuplot
+  integer           :: frame_step
 
 
 contains
@@ -136,7 +138,10 @@ contains
     read(1,*) dummy                              ! 63
     read(1,*) dummy                              ! 64
     read(1,*) animation                          ! 65
-
+    read(1,*) dummy                              ! 66
+    read(1,*) gnuplot                            ! 67
+    read(1,*) dummy                              ! 68
+    read(1,*) frame_step                         ! 69
     k_max=1e3
     epsilon=1e-5
 
@@ -146,7 +151,7 @@ contains
   subroutine default_value_init(application)
     implicit none
     character(len=*),intent(in) :: application
-
+    
     if (application.eq.'fwi') then
        total_length=1.0
        final_time=3.0
@@ -179,7 +184,11 @@ contains
        animation='no'
        k_max=1e3
        epsilon=1e-5
+       gnuplot=.true.
+       frame_step=1
+       
     else if (application.eq.'forward') then
+       
        total_length=1.0
        final_time=3.0
        nb_elem=100
@@ -201,6 +210,8 @@ contains
        animation='no'
        k_max=1e3
        epsilon=1e-5
+       gnuplot=.true.
+       frame_step=10
     end if
 
   end subroutine default_value_init

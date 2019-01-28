@@ -49,7 +49,7 @@ program main
   data_P(0,1)=0.0
   data_P(0,2)=0.0
   if (animation.eq.'data_forward') then
-     call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+     call print_coef(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
   end if
   do i=1,forward%n_time_step
      t=i*forward%dt
@@ -58,8 +58,8 @@ program main
      data_P(i,1)=t
      data_P(i,2)=forward%P((receiver_loc-1)*DoF+1)
      if (animation.eq.'data_forward')  then
-        if (modulo(i,10).eq.0) then
-           call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+        if (modulo(i,frame_step).eq.0) then
+           call print_coef(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
         end if
      end if
   end do
@@ -74,7 +74,7 @@ program main
   call free_acoustic_problem(forward)
 
   !--------------------- Animation ----------------------------------------------
-  call gif_creation(animation,forward_n_time_step,forward_n_time_step)
+  call gif_creation(gnuplot,animation,frame_step,forward_n_time_step,0)
 
   !------------------------ Free Variables --------------------------------------
   call free_polynom

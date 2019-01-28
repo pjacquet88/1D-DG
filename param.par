@@ -61,7 +61,9 @@ false
 1.0
 #62
 #63 ############ ANIMATTION ####################################################
-#64 animation         # Define the animation (no,data_forward,fwi_forward,fwi_backward,model_updates)
+#64 animation    # Define the animation (no,data_forward,fwi_forward,fwi_backward,model_updates)
 model_update
-
-
+#66 gnuplot      # Bool to define the animation launcher (T=gnuplot F=python)
+True
+#68 frame_step   # Increment between each frame of the animation
+1

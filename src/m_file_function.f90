@@ -4,7 +4,7 @@ module m_file_function
   use m_polynom
   implicit none
 
-  public  :: load,print_vect,laplace_filter
+  public  :: load,print_coef,print_vector,laplace_filter,str
   private :: norm,nb_line
 
 contains
@@ -12,6 +12,7 @@ contains
   !*************** PRIVATE ******************************************************
   ! Calculate the norm of a vector U
   function norm(U)
+    implicit none
     real(mp),dimension(:),intent(in) :: U
     real(mp)                         :: norm
 
@@ -22,6 +23,7 @@ contains
 
   ! Get the number of line of a file
   function nb_line(fichier)
+    implicit none
     character(len=*),intent(in) :: fichier
     integer :: ierr ! successful (if == 0) ou failed (si /= 0)
     integer :: nb_line
@@ -40,6 +42,7 @@ contains
   !*************** PUBLIC   *****************************************************
   ! Load a vector in a specific file .dat
   subroutine load(U,char,N)
+    implicit none
     real(mp),dimension(:),intent(inout):: U
     character(len=*) ,intent(in)       :: char
     integer          ,intent(in)       :: N
@@ -58,10 +61,28 @@ contains
   end subroutine load
 
 
-   !***************** SORTIE DE RESULTAT *********************************
+  !***************** SORTIE DE RESULTAT *********************************
+
+  subroutine print_vector(vector,name,N)
+    implicit none
+    real(mp),dimension(:),intent(in) :: vector
+    character(len=*)     ,intent(in) :: name
+    integer              ,intent(in) :: N
+    character(len=50)                :: file_name
+    integer                          :: i
+
+    file_name="../Files/"//trim(name)//trim(str(N))//".dat"
+
+    open(unit=2,file=file_name)
+    do i=1,size(vector)
+       write(2,*) i,vector(i)
+    end do
+    close(2)
+  end subroutine print_vector
 
   ! Print a vector in a specific file
-  subroutine print_vect(vector,nb_elem,DoF,dx,bernstein,N,name)
+  subroutine print_coef(vector,nb_elem,DoF,dx,bernstein,N,name)
+    implicit none
     real(mp),dimension(nb_elem*DoF),intent(in) :: vector
     integer                        ,intent(in) :: nb_elem
     integer                        ,intent(in) :: DoF
@@ -69,7 +90,7 @@ contains
     logical                        ,intent(in) :: bernstein
     integer                        ,intent(in) :: N
     character(len=*)               ,intent(in) :: name
-    
+
     integer :: i,j
     character(len=20)           :: F_NAME
     real(mp)                    :: x,ddx
@@ -107,11 +128,12 @@ contains
 
     end if
     close(2)
-  end subroutine print_vect
+  end subroutine print_coef
 
 
   ! Add a laplacian filter on a vector
   function laplace_filter(u)
+    implicit none
     real(mp),dimension(:),intent(in)    :: u
     real(mp),dimension(size(u),size(u)) :: L,Linv,test
     integer                             :: i,j
@@ -130,5 +152,15 @@ contains
 
     laplace_filter=matmul(L,u)
   end function laplace_filter
+
+
+function str(k)
+  implicit none
+  integer, intent(in) :: k
+  character(len=100)  :: str
+  write (str, *) k
+  str = adjustl(str)
+end function str
+
 
 end module m_file_function

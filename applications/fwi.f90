@@ -19,6 +19,7 @@ program main
 
   real(mp)                            :: t
   integer                             :: i,j
+  character(len=50)                   :: file_name
 
   integer                             :: data_time_step
   integer                             :: fwi_time_step
@@ -50,7 +51,7 @@ program main
   data_P(0,1)=0.0
   data_P(0,2)=0.0
   if (animation.eq.'data_forward') then
-     call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
+     call print_coef(forward%P,nb_elem,DoF,forward%dx,bernstein,0,'FP')
   end if
   do i=1,forward%n_time_step
      t=i*forward%dt
@@ -59,7 +60,7 @@ program main
      data_P(i,2)=forward%P((receiver_loc-1)*DoF+1)
      if (animation.eq.'data_forward')  then
         if (modulo(i,10).eq.0) then
-           call print_vect(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
+           call print_coef(forward%P,nb_elem,DoF,forward%dx,bernstein,i,'FP')
         end if
      end if
   end do
@@ -82,10 +83,17 @@ program main
                 bernstein,source_loc,receiver_loc,strategy,scalar_product,   &
                 animation,adjoint_test)
 
+  call print_vector(fwi%velocity_model,'VP',0)
+  
   do i=1,fwi%nb_iter
      fwi%current_iter=i
      call progress_bar(i,fwi%nb_iter)
      call one_fwi_step(fwi)
+     if (animation.eq.'model_update')  then
+        if (modulo(i,frame_step).eq.0) then
+           call print_vector(fwi%velocity_model,'VP',i)
+        end if
+     end if
   end do
   call free_fwi(fwi)
 
@@ -94,8 +102,8 @@ program main
   print*,' '
 
   !--------------------- Animation ----------------------------------------------
-  call gif_creation(animation,nb_iter_fwi,data_time_step)
-
+!  call gif_creation(animation,nb_iter_fwi,data_time_step)
+  call gif_creation(gnuplot,animation,frame_step,data_time_step,fwi%nb_iter)
   !------------------------ Free polynoms --------------------------------------
   call free_polynom
 
