@@ -1,26 +1,43 @@
-README NOT UPDATED
+# 1D-DG Project
 
-I STILL HAVE SOME CORRECTION TO DO
+## To compile :
+"cmake .." in build then "make"
 
+## To clean :
+- clean outputs : "make data-clean" in build
 
+- clean .o and .mod : "make clean" in build
 
-# Bernstein
+- clean everything : "make cleanall" in build
 
-To compile : "make"
-To clean : "make clean"
-To execute : "./run"
+## To execute a forward run :
 
-You need to:  -have a recent version of gnuplot to create and see the animation automatically created ($ sudo apt install gnuplot)
-             -check your Blas/Lapack library location in the Makefile
-            
-            
- Some parameters at the beginning of the file main.f90 can be changed in order to personalize the simulation
-For instance :
- 
-_ RTM=T leads to a RTM simulation
-_ RTM=F leads to a forward simulation
-_ Animation = T or F to have a forward animation (the backward propagation can be obtained by modifying the script animate.gnuplot)
-_ the size of the vector density and velocity can be changed manually in order to create the desired amount of interfaces. If the size of velocity is X it will cut the entire domain in X equal part of different velocity (in the main the velocity is given by an incrementation but it can be personnalized however you want)
+"./FORWARD" or "./FORWARD parameter-file.par" from build if there is a parameter file to specify
 
-By default the simulation is perfomed in simple precision. If you want to switch to double precision comment/uncomment the CFLAGS lines and change in the m_matrix.f90 module (line 33/34) SGETRF and SGETRI to DGETRF and DGETRI 
- 
+To execute a fwi run :
+
+"./FWI" or "./FWI parameter-file.par" from build if there is a parameter file to specify
+
+NB : a default parameter file is given in the root of the project and is called "param.par"
+
+## Dependancies :
+To compile and run the code you will need :
+
+- gfortran
+- cmake
+- BLAS and LAPACK libraries
+
+For animations you can have :
+
+- gnuplot
+
+or
+
+- python3 (faster)
+
+- conda to set the python environment properly
+
+To set python properly you have to :
+- create the environment from the envornment.yml in the animation_script directory : `conda env create -f environment.yml`
+- set the environment : `conda activate 1D_DG_env`
+- set gnuplot booleen in param file to false

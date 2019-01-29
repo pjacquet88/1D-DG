@@ -16,7 +16,7 @@ frames=int((max_step/print_step)+1)
 if file_name=='VP':
     xmin = 0
     xmax = 100
-    ymin = -0.5
+    ymin = 0.5
     ymax = 2.0
     interval=100
 
