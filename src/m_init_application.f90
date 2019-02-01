@@ -49,16 +49,13 @@ contains
        print*,''//achar(27)//'[31m NO PARAMETER FILES GIVEN '//achar(27)//'[0m'
        print*,''//achar(27)//'[31m DEFAULT VALUES WILL BE TAKEN '//achar(27)//'[0m'
        call default_value_init(application)
-       call print_selected_parameters(application)
     else if (n_arg.eq.1) then
        call get_command_argument(n_arg,param_file_name)
        print*,''//achar(27)//'[32m PARAMETER FILE GIVEN : '//achar(27)//'[0m',param_file_name
        call read_param(param_file_name)
-       call print_selected_parameters(application)
     else
        print*,'NUMBER OF ARGUMENT NOT VALID'
     end if
-
   end subroutine setup_parameters
 
 
@@ -258,7 +255,7 @@ contains
        print*,''//achar(27)//'[92msize_density_ini   ='//achar(27)//'[0m',size_density_ini
        print*,''//achar(27)//'[92mdensity_ini        ='//achar(27)//'[0m',density_ini
        print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
-       print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
+       print*,''//achar(27)//'[92manimation          ='//achar(27)//'[0m',animation
        print*,''
        print*,''
 
@@ -289,7 +286,7 @@ contains
        print*,''//achar(27)//'[92msize_density_data  ='//achar(27)//'[0m',size_density_data
        print*,''//achar(27)//'[92mdensity_data       ='//achar(27)//'[0m',density_data
        print*,''//achar(27)//'[96m##################### ANIMATION ########################################'//achar(27)//'[0m'
-       print*,''//achar(27)//'[92manimation           ='//achar(27)//'[0m',animation
+       print*,''//achar(27)//'[92manimation          ='//achar(27)//'[0m',animation
        print*,''
        print*,''
     end if

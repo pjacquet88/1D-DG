@@ -19,7 +19,7 @@ add_library(fwi_lib ${SRC})
 message("Library created")
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-target_compile_options(fwi_lib PRIVATE -DKIND_REAL=dp)
+target_compile_options(fwi_lib PRIVATE -DKIND_REAL=sp)
 
 #--------------------- APPLICATIONS ---------------------------
 
@@ -119,6 +119,39 @@ if(LAPACK_FOUND AND BLAS_FOUND)
   target_link_libraries(test_stiff_matrix_bb_eval ${LAPACK_LIBRARIES})
 endif()
 add_test(test_stiff_matrix_bb_eval ${CMAKE_BINARY_DIR}/test_stiff_matrix_bb_eval)
+
+
+# TEST9 : Test ABC with LF
+set(src_abc_lf tests/test_abc_lf.f90)
+add_executable(test_abc_lf ${src_abc_lf})
+target_link_libraries(test_abc_lf fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_abc_lf ${BLAS_LIBRARIES})
+  target_link_libraries(test_abc_lf ${LAPACK_LIBRARIES})
+endif()
+add_test(test_abc_lf ${CMAKE_BINARY_DIR}/test_abc_lf)
+
+
+# TEST9 : Test ABC with RK4
+set(src_abc_rk4 tests/test_abc_rk4.f90)
+add_executable(test_abc_rk4 ${src_abc_rk4})
+target_link_libraries(test_abc_rk4 fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_abc_rk4 ${BLAS_LIBRARIES})
+  target_link_libraries(test_abc_rk4 ${LAPACK_LIBRARIES})
+endif()
+add_test(test_abc_rk4 ${CMAKE_BINARY_DIR}/test_abc_rk4)
+
+
+# TEST9 : Test ABC with LF
+set(src_abc_ab3 tests/test_abc_ab3.f90)
+add_executable(test_abc_ab3 ${src_abc_ab3})
+target_link_libraries(test_abc_ab3 fwi_lib)
+if(LAPACK_FOUND AND BLAS_FOUND)
+  target_link_libraries(test_abc_ab3 ${BLAS_LIBRARIES})
+  target_link_libraries(test_abc_ab3 ${LAPACK_LIBRARIES})
+endif()
+add_test(test_abc_ab3 ${CMAKE_BINARY_DIR}/test_abc_ab3)
 
 
 #------------------ CUSTOM TARGETS --------------------

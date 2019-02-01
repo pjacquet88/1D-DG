@@ -29,7 +29,8 @@ program main
   !******************************************************************************
 
   call setup_parameters('fwi')
-
+  call print_selected_parameters('fwi')
+  
   call date_and_time(values=values)
   call random_seed(size=k)
   allocate(seed(1:k))

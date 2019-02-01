@@ -17,7 +17,7 @@ program main
  
   call setup_parameters('forward')
   bool=.true.
-
+  call print_selected_parameters('forward')
   
   do order=1,10
      DoF=order+1

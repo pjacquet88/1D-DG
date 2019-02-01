@@ -16,6 +16,7 @@ program main
   !******************************************************************************
  
   call setup_parameters('forward')
+  call print_selected_parameters('forward')
   bool=.true.
 
   

@@ -18,7 +18,7 @@ program main
   call setup_parameters('forward')
   bernstein=.false.
   bool=.true.
-
+  call print_selected_parameters('forward')
 
   do order=1,10
      DoF=order+1
@@ -36,7 +36,7 @@ program main
      print*,'order ::',order,'error ::',error
 
      if (mp.eq.sp) then
-        bool=(bool.and.(error.lt.1e-4_mp))
+        bool=(bool.and.(error.lt.1e-3_mp))
      else if (mp.eq.dp) then
         bool=(bool.and.(error.lt.1e-8_mp))
      end if

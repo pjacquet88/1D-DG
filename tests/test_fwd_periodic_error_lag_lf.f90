@@ -22,6 +22,7 @@ program main
   signal='ricker'
   boundaries='periodic'
   final_time=1.0_mp
+  call print_selected_parameters('forward')
   
   do order=1,10
      DoF=order+1

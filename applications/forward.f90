@@ -17,9 +17,6 @@ program main
   integer                             :: forward_n_time_step
   real(mp),dimension(:,:),allocatable :: data_P
   real(mp),dimension(:,:),allocatable :: data_U
-
-  integer                             :: values(1:8)
-  integer,dimension(:), allocatable   :: seed
   !******************************************************************************
 
   real(mp),parameter :: mp_test=1.0
@@ -28,13 +25,9 @@ program main
 
   
   call setup_parameters('forward')
+  call print_selected_parameters('forward')
 
-  call date_and_time(values=values)
-  call random_seed(size=k)
-  allocate(seed(1:k))
-  seed(:) = values(8)
-  call random_seed(put=seed)
-
+  
   call init_polynom(order)
 
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
