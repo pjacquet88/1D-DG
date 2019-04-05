@@ -48,6 +48,7 @@ module m_fwi
      real(mp)                            :: dx              ! 1D elements size
      real(mp)                            :: alpha           ! penalization
      logical                             :: bernstein       ! logical if T -> Bernstein
+     character(len=20)                   :: flux            ! Flux for DG
      character(len=20)                   :: signal          ! initial perturbation (take flat)
      character(len=20)                   :: boundaries      ! boundary condition
      integer                             :: source_loc      ! source location (at the beginning of an element)
@@ -70,6 +71,9 @@ contains
                       nb_elem,DoF,time_scheme,total_length,final_time,alpha,    &
                       bernstein,source_loc,receiver_loc,strategy,               &
                       scalar_product,animation,adjoint_test)
+
+    implicit none
+    
     type(t_fwi)            ,intent(inout) :: fwi
     integer                ,intent(in)    :: nb_iter
     real(mp),dimension(:)  ,intent(in)    :: velocity_ini
@@ -171,8 +175,8 @@ contains
 
     call init_acoustic_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
          fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
-         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%source_loc,      &
-         fwi%receiver_loc)
+         fwi%alpha,fwi%bernstein,fwi%flux,fwi%signal,fwi%boundaries,            &
+         fwi%source_loc,fwi%receiver_loc)
 
     fwi%n_time_step=fwi%forward%n_time_step
     fwi%dt=fwi%forward%dt

@@ -42,7 +42,8 @@ program main
   
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
-                             bernstein,signal,boundaries,source_loc,receiver_loc)
+                             bernstein,flux,signal,boundaries,source_loc,       &
+                             receiver_loc)
 
   data_time_step=forward%n_time_step
   allocate(data_P(0:forward%n_time_step,2))

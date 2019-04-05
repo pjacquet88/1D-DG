@@ -1,3 +1,4 @@
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,8 +24,8 @@ if file_name=='VP':
 else:
     xmin = 0
     xmax = 1
-    ymin = -0.5
-    ymax = 0.5
+    ymin = -1.0
+    ymax = 1.0
     interval=20
 
 fig = plt.figure() # initialise la figure

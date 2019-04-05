@@ -32,8 +32,9 @@ program main
      end do
 
      call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
-          density_data,total_length,final_time,alpha,        &
-          bernstein,signal,boundaries,source_loc,receiver_loc)
+                                 density_data,total_length,final_time,alpha,       &
+                                 bernstein,flux,signal,boundaries,source_loc,      &
+                                 receiver_loc)
 
      error=abs(1.0_mp-dot_product(sparse_matmul(forward%M,x_bb),x_bb)/nb_elem)
 

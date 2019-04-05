@@ -10,6 +10,7 @@ module m_init_application
   character(len=20) :: time_scheme    ! change the time scheme
   real(mp)          :: alpha          ! Penalisation value
   character(len=20) :: signal         ! initial values (flat = 0)
+  character(len=20) :: flux           ! define the fluw (center, upwind...)
   character(len=20) :: boundaries     ! Boundary Conditions
   logical           :: bernstein      ! If F-> Lagrange Elements
   integer           :: k_max          ! iterr max for power method algo.
@@ -87,58 +88,59 @@ contains
     read(1,*) dummy                              ! 19
     read(1,*) time_scheme                        ! 20
     read(1,*) dummy                              ! 21
-    read(1,*) dummy                              ! 22
+    read(1,*) flux                               ! 22
     read(1,*) dummy                              ! 23
-    read(1,*) signal                             ! 24
-    read(1,*) dummy                              ! 25
-    read(1,*) boundaries                         ! 26
+    read(1,*) dummy                              ! 24
+    read(1,*) signal                             ! 26
     read(1,*) dummy                              ! 27
-    read(1,*) dummy                              ! 28
+    read(1,*) boundaries                         ! 28
     read(1,*) dummy                              ! 29
-    read(1,*) nb_iter_fwi                        ! 30
+    read(1,*) dummy                              ! 30
     read(1,*) dummy                              ! 31
-    read(1,*) strategy                           ! 32
+    read(1,*) nb_iter_fwi                        ! 32
     read(1,*) dummy                              ! 33
-    read(1,*) scalar_product                     ! 34
+    read(1,*) strategy                           ! 34
     read(1,*) dummy                              ! 35
-    read(1,*) adjoint_test                       ! 36
+    read(1,*) scalar_product                     ! 36
     read(1,*) dummy                              ! 37
-    read(1,*) dummy                              ! 38
+    read(1,*) adjoint_test                       ! 38
     read(1,*) dummy                              ! 39
-    read(1,*) source_loc                         ! 40
+    read(1,*) dummy                              ! 40
     read(1,*) dummy                              ! 41
-    read(1,*) receiver_loc                       ! 42
+    read(1,*) source_loc                         ! 42
     read(1,*) dummy                              ! 43
-    read(1,*) dummy                              ! 44
+    read(1,*) receiver_loc                       ! 44
     read(1,*) dummy                              ! 45
-    read(1,*) size_velocity_data                 ! 46
-    allocate(velocity_data(size_velocity_data))
+    read(1,*) dummy                              ! 46
     read(1,*) dummy                              ! 47
-    read(1,*) velocity_data                      ! 48
+    read(1,*) size_velocity_data                 ! 48
+    allocate(velocity_data(size_velocity_data))
     read(1,*) dummy                              ! 49
-    read(1,*) size_velocity_ini                  ! 50
-    allocate(velocity_ini(size_velocity_ini))
+    read(1,*) velocity_data                      ! 50
     read(1,*) dummy                              ! 51
-    read(1,*) velocity_ini                       ! 52
-    read(1,*) dummy                              ! 53 
-    read(1,*) dummy                              ! 54
-    read(1,*) size_density_data                  ! 55
-    allocate(density_data(size_density_data))
+    read(1,*) size_velocity_ini                  ! 52
+    allocate(velocity_ini(size_velocity_ini))
+    read(1,*) dummy                              ! 53
+    read(1,*) velocity_ini                       ! 54
+    read(1,*) dummy                              ! 55 
     read(1,*) dummy                              ! 56
-    read(1,*) density_data                       ! 57
+    read(1,*) size_density_data                  ! 57
+    allocate(density_data(size_density_data))
     read(1,*) dummy                              ! 58
-    read(1,*) size_density_ini                   ! 59
-    allocate(density_ini(size_density_data))
+    read(1,*) density_data                       ! 59
     read(1,*) dummy                              ! 60
-    read(1,*) density_ini                        ! 61
+    read(1,*) size_density_ini                   ! 61
+    allocate(density_ini(size_density_data))
     read(1,*) dummy                              ! 62
-    read(1,*) dummy                              ! 63
+    read(1,*) density_ini                        ! 63
     read(1,*) dummy                              ! 64
-    read(1,*) animation                          ! 65
+    read(1,*) dummy                              ! 65
     read(1,*) dummy                              ! 66
-    read(1,*) gnuplot                            ! 67
+    read(1,*) animation                          ! 67
     read(1,*) dummy                              ! 68
-    read(1,*) frame_step                         ! 69
+    read(1,*) gnuplot                            ! 69
+    read(1,*) dummy                              ! 70
+    read(1,*) frame_step                         ! 71
     k_max=1e3
     epsilon=1e-5
 
@@ -159,6 +161,7 @@ contains
        alpha=1.0
        time_scheme='RK4'
        signal='flat'
+       flux='center'
        boundaries='ABC'
        nb_iter_fwi=25
        strategy='ATD'
@@ -195,6 +198,7 @@ contains
        alpha=1.0
        time_scheme='RK4'
        signal='flat'
+       flux='center'
        boundaries='ABC'
        source_loc=1
        receiver_loc=30
@@ -233,6 +237,7 @@ contains
        print*,''//achar(27)//'[92mbernstein          ='//achar(27)//'[0m',bernstein
        print*,''//achar(27)//'[92malpha              ='//achar(27)//'[0m',alpha
        print*,''//achar(27)//'[92mtime_scheme        ='//achar(27)//'[0m',time_scheme
+       print*,''//achar(27)//'[92mflux               ='//achar(27)//'[0m',flux
        print*,''//achar(27)//'[96m####################### DIRECT PROBLEM SPECIFICITIES ###################'//achar(27)//'[0m'
        print*,''//achar(27)//'[92msignal             ='//achar(27)//'[0m',signal
        print*,''//achar(27)//'[92mboundaries         ='//achar(27)//'[0m',boundaries
@@ -273,6 +278,7 @@ contains
        print*,''//achar(27)//'[92mbernstein          ='//achar(27)//'[0m',bernstein
        print*,''//achar(27)//'[92malpha              ='//achar(27)//'[0m',alpha
        print*,''//achar(27)//'[92mtime_scheme        ='//achar(27)//'[0m',time_scheme
+       print*,''//achar(27)//'[92mflux               ='//achar(27)//'[0m',flux
        print*,''//achar(27)//'[96m####################### DIRECT PROBLEM SPECIFICITIES ###################'//achar(27)//'[0m'
        print*,''//achar(27)//'[92msignal             ='//achar(27)//'[0m',signal
        print*,''//achar(27)//'[92mboundaries         ='//achar(27)//'[0m',boundaries

@@ -20,6 +20,7 @@ message("Library created")
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 target_compile_options(fwi_lib PRIVATE -DKIND_REAL=sp)
+#target_compile_options(fwi_lib PRIVATE -DKIND_REAL=sp)
 
 #--------------------- APPLICATIONS ---------------------------
 
