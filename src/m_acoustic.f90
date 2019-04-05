@@ -261,7 +261,7 @@ contains
      end if
 
      call init_UP(problem)
-     
+
   end subroutine init_acoustic_problem
 
   ! Initialize P and U at time=0  
@@ -608,6 +608,9 @@ contains
       end select
 
     case DEFAULT
+
+      print*,'This flux is not implemented yet'
+      STOP
 
     end select
 
