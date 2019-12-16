@@ -20,7 +20,7 @@ To execute a fwi run :
 
 NB : a default parameter file is given in the root of the project and is called "param.par"
 
-## Dependancies :
+## Dependencies :
 To compile and run the code you will need :
 
 - gfortran

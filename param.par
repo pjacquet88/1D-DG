@@ -17,7 +17,7 @@ true
 #17 alpha          # Penalization value
 1.0
 #19 time_scheme    # Choice of the time scheme (LF,RK4,AB3)
-RK4
+AB3
 #21
 #22 ################ DIRECT PROBLEM SPECIFICITIES ###############################
 #23 signal         # P and U initial values (flat=0, ricker, sinus)
@@ -27,8 +27,8 @@ ABC
 #27
 #28 ############### FWI SPECIFICITIES ###########################################
 #29 nb_iter_fwi    # Number of iteration for the FWI
-50
-#31 strategy       # Adjoint Then Discretized (ATD) / Discretized Then Adjoint (ATD)
+100
+#31 strategy       # Adjoint Then Discretized (ATD) / Discretized Then Adjoint (DTA)
 DTA
 #33 scalar_product # Scalar product to describe the adjoint state
 canonical
@@ -64,6 +64,6 @@ false
 #64 animation    # Define the animation (no,data_forward,fwi_forward,fwi_backward,model_updates)
 model_update
 #66 gnuplot      # Bool to define the animation launcher (T=gnuplot F=python)
-True
+FALSE
 #68 frame_step   # Increment between each frame of the animation
-1
+5

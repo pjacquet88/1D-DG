@@ -127,6 +127,7 @@ add_custom_target(data_clean
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/fort.*
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.gif
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.dat
+  COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/run.txt
   COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_SOURCE_DIR}/build/*.a)
 
 add_custom_target(cleanall

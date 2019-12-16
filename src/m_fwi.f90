@@ -10,7 +10,7 @@ module m_fwi
 
   type t_fwi
      type(acoustic_problem)              :: forward         ! the forward state
-     type(adjoint_problem)               :: backward        ! the backwardstate 
+     type(adjoint_problem)               :: backward        ! the backwardstate
      integer                             :: nb_iter         ! nb iteration of the fwi
      integer                             :: current_iter    ! nb of the current iteration
      real(mp),dimension(:)  ,allocatable :: velocity_model  ! the velocity model
@@ -156,10 +156,119 @@ contains
     deallocate(fwi%gradient_rho)
   end subroutine free_fwi
 
-
-  ! Performs one fwi iteration
-  subroutine one_fwi_step(fwi)
+  subroutine one_fwi_step(fwi, beta)
+    implicit none
     type(t_fwi),intent(inout) :: fwi
+    real(mp)   ,intent(inout) :: beta
+
+    real(mp) :: cost_function_before
+    real(mp) :: cost_function_after
+
+    integer :: tentative
+
+    tentative = 1
+
+    cost_function_after = abs(huge(1.0))
+
+    call evaluate_gradient(fwi,cost_function_before)
+    ! call update_model(fwi,beta)
+    ! beta=0.99*beta
+
+     do while (cost_function_before.lt.cost_function_after)
+
+       call update_model(fwi,beta)
+       call evaluate_cf(fwi,cost_function_after)
+
+       if (cost_function_after.lt.cost_function_before) then
+         beta = 1.25*beta
+       else
+         call update_model(fwi,-beta)
+         beta = 0.5*beta
+       end if
+
+       tentative = tentative + 1
+
+     end do
+
+     open(23,file='run.txt',status='unknown',action='write', form='formatted',position="append")
+     write(23,*) fwi%current_iter, tentative, cost_function_before, cost_function_after, beta
+     close(23)
+
+  end subroutine one_fwi_step
+
+
+  ! Performs evaluate the cost function
+  subroutine evaluate_cf(fwi,CF)
+    type(t_fwi),intent(inout) :: fwi
+    real(mp)   ,intent(out)   :: CF
+    integer                   :: current_time_step
+    real(mp)                  :: t
+    real(mp)                  :: t1,t2
+
+    real(mp),dimension(fwi%DoF*fwi%nb_elem) :: RTM
+    integer                                 :: i,j
+    type(t_adjoint_test)                    :: test
+
+
+    call init_acoustic_problem(fwi%forward,fwi%nb_elem,fwi%DoF,fwi%time_scheme, &
+         fwi%velocity_model,fwi%density_model,fwi%total_length,fwi%final_time,  &
+         fwi%alpha,fwi%bernstein,fwi%signal,fwi%boundaries,fwi%source_loc,      &
+         fwi%receiver_loc)
+
+    fwi%n_time_step=fwi%forward%n_time_step
+    fwi%dt=fwi%forward%dt
+    fwi%dx=fwi%forward%dx
+    call Sparse2Full(fwi%forward%M,fwi%M)
+    call Sparse2Full(fwi%forward%Ap,fwi%Ap)
+    call Sparse2Full(fwi%forward%App,fwi%App)
+    call Sparse2Full(fwi%forward%Av,fwi%Av)
+
+    allocate(fwi%P(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    allocate(fwi%U(fwi%DoF*fwi%nb_elem,0:fwi%n_time_step))
+    allocate(fwi%P_received(0:fwi%n_time_step,2))
+    allocate(fwi%U_received(0:fwi%n_time_step,2))
+
+    fwi%P(:,0)=0
+    fwi%U(:,0)=0
+    fwi%P_received(:,:)=0.0_mp
+    fwi%U_received(:,:)=0.0_mp
+
+    current_time_step=0
+    t=0
+    do current_time_step=1,fwi%n_time_step
+       t=current_time_step*fwi%forward%dt
+       call one_forward_step(fwi%forward,t)
+       fwi%P(:,current_time_step)=fwi%forward%P
+       fwi%U(:,current_time_step)=fwi%forward%U
+       fwi%P_received(current_time_step,1)=t
+       fwi%P_received(current_time_step,2)=                                     &
+                                    fwi%forward%P(fwi%DoF*(fwi%receiver_loc-1)+1)
+
+       fwi%U_received(current_time_step,1)=t
+       fwi%U_received(current_time_step,2)=                                     &
+                                    fwi%forward%U(fwi%DoF*(fwi%receiver_loc-1)+1)
+     end do
+
+    call free_acoustic_problem(fwi%forward)
+
+    call cost_function(CF,fwi%P_received,fwi%data_P,fwi%final_time,fwi%current_iter)
+
+    deallocate(fwi%P)
+    deallocate(fwi%U)
+    deallocate(fwi%P_received)
+    deallocate(fwi%U_received)
+    deallocate(fwi%M)
+    deallocate(fwi%Ap)
+    deallocate(fwi%App)
+    deallocate(fwi%Av)
+
+  end subroutine evaluate_cf
+
+
+  ! Evaluate gradient
+  subroutine evaluate_gradient(fwi,CF)
+    type(t_fwi),intent(inout) :: fwi
+    real(mp)   ,intent(out)   :: CF
     integer                   :: current_time_step
     real(mp)                  :: t
     real(mp)                  :: t1,t2
@@ -343,7 +452,7 @@ contains
        print*,'M Inner Product QPQU/GPGU',inner_product_M(fwi%QP,fwi%QU, &
                                                           fwi%GP,fwi%GU, &
                                                           test%M)
-       
+
        print*,'Difference relative :',(inner_product_M(fwi%P,fwi%U,   &
                                                        fwi%DP,fwi%DU, &
                                                        test%M)        &
@@ -358,14 +467,15 @@ contains
 
     call free_adjoint_problem(fwi%backward)
 
-    if (fwi%strategy.eq.'ATD') then
-       call gradient_ATD_computation(fwi)
-    else if (fwi%strategy.eq.'DTA') then
-       call gradient_DTA_computation(fwi)
-    end if
-    call update_model(fwi)
 
-    call cost_function(fwi%P_received,fwi%data_P,fwi%final_time,fwi%current_iter)
+    if (fwi%strategy.eq.'ATD') then
+      call gradient_ATD_computation(fwi)
+    else if (fwi%strategy.eq.'DTA') then
+      call gradient_DTA_computation(fwi)
+    end if
+
+    call cost_function(CF,fwi%P_received,fwi%data_P,fwi%final_time,fwi%current_iter)
+
     deallocate(fwi%P)
     deallocate(fwi%U)
     deallocate(fwi%QP)
@@ -387,7 +497,7 @@ contains
        deallocate(fwi%DU)
     end if
 
-  end subroutine one_fwi_step
+  end subroutine evaluate_gradient
 
 
   ! Evaluates the combined RHS for a specific time scheme (EF=G)
@@ -583,7 +693,7 @@ contains
 
                 dtp=(fwi%P(beg_node:end_node,j+1)-fwi%P(beg_node:end_node,j))   &
                      /(fwi%dt)
-                
+
                 qp=fwi%QP(beg_node:end_node,j)
                 qu=fwi%QU(beg_node:end_node,j)
 
@@ -692,23 +802,24 @@ contains
                    end do
 
                    fwi%gradient_vp(i)=fwi%gradient_vp(i)+moyenne
-                end if
+                 end if
              end do
-          end do
-       end if
-    end if
+           end do
+           fwi%gradient_vp = -fwi%gradient_vp
+        end if
+     end if
 
   end subroutine gradient_DTA_computation
 
   ! Updates the model thanks to the gradient
-  subroutine update_model(fwi)
+  subroutine update_model(fwi,beta)
     type(t_fwi),intent(inout) :: fwi
+    real(mp)   ,intent(in)    :: beta
 
     integer                         :: i,j
     integer,parameter               :: nb_section=9
     integer,dimension(nb_section,2) :: lim_section
     real(mp),dimension(nb_section)  :: grad
-    real(mp),parameter              :: beta=0.03_mp
 
     grad=0.0_mp
 
@@ -731,11 +842,6 @@ contains
        !grad=(1.0_mp/grad(50))*grad
     end if
 
-    open(unit=19,file='grad.dat')
-    do i=1,size(grad)
-       write(19,*) i,grad(i)
-    end do
-
     do i=1,nb_section
        do j=lim_section(i,1),lim_section(i,2)
           fwi%velocity_model(j)=fwi%velocity_model(j)-beta*grad(i)
@@ -750,15 +856,15 @@ contains
 
 
   ! Evaluates the Cost function
-  subroutine cost_function(P_received,data_P,final_time,iter)
-    real(mp),dimension(:,:),intent(in) :: P_received
-    real(mp),dimension(:,:),intent(in) :: data_P
-    real(mp)               ,intent(in) :: final_time
-    integer                ,intent(in) :: iter
-    real(mp)                           :: CF
-    real(mp)                           :: eval_P_received,eval_data_P
-    real(mp)                           :: dt,t
-    integer                            :: j,i,n_time_step
+  subroutine cost_function(CF,P_received,data_P,final_time,iter)
+    real(mp),               intent(out) :: CF
+    real(mp),dimension(:,:),intent(in)  :: P_received
+    real(mp),dimension(:,:),intent(in)  :: data_P
+    real(mp)               ,intent(in)  :: final_time
+    integer                ,intent(in)  :: iter
+    real(mp)                            :: eval_P_received,eval_data_P
+    real(mp)                            :: dt,t
+    integer                             :: j,i,n_time_step
 
     dt=P_received(2,1)-P_received(1,1)
     dt=min(dt,data_P(2,1)-data_P(1,1))
@@ -803,15 +909,10 @@ contains
 
        CF=CF+(eval_P_received-eval_data_P)**2
 
-       write(26,*) t,eval_data_P
-       write(27,*) t,eval_P_received
-
     end do
 
     CF=CF*dt
     CF=0.5_mp*CF
-
-    write(33,*) iter,CF
 
     if (CF.eq.0.0_mp) then
        print*,'The gradient is null, end of the FWI algorithm'

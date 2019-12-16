@@ -26,6 +26,8 @@ program main
 
   integer                             :: values(1:8), k
   integer,dimension(:), allocatable   :: seed
+
+  real(mp)                            :: beta
   !******************************************************************************
 
   call setup_parameters('fwi')
@@ -38,7 +40,7 @@ program main
 
   !*********** Polynomial initialization *************
   call init_polynom(order)
-  
+
   call init_acoustic_problem(forward,nb_elem,DoF,time_scheme,velocity_data,     &
                              density_data,total_length,final_time,alpha,        &
                              bernstein,signal,boundaries,source_loc,receiver_loc)
@@ -84,11 +86,13 @@ program main
                 animation,adjoint_test)
 
   call print_vector(fwi%velocity_model,'VP',0)
-  
+
+  beta = 0.1
+
   do i=1,fwi%nb_iter
      fwi%current_iter=i
      call progress_bar(i,fwi%nb_iter)
-     call one_fwi_step(fwi)
+     call one_fwi_step(fwi, beta)
      if (animation.eq.'model_update')  then
         if (modulo(i,frame_step).eq.0) then
            call print_vector(fwi%velocity_model,'VP',i)
